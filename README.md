@@ -62,8 +62,6 @@ gh repo clone spotty118/WindowAI-Starter
 3. Set up proper file permissions
 4. Configure domain settings
 
-For detailed hosting instructions, check our [hosting guide](docs/HOSTING.md).
-
 ## How It Works
 
 1. Install the Window AI Chrome extension
