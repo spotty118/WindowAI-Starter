@@ -1,4 +1,4 @@
-# WindowAI Starter
+# Window AI Starter
 
 A minimalist, ready-to-use chat interface for the Window AI Chrome extension. Built with vanilla JavaScript, this starter template provides developers with the essential building blocks for creating AI chat applications.
 
