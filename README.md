@@ -12,7 +12,7 @@ A minimalist, ready-to-use chat interface for the Window AI Chrome extension. Bu
 - 🔧 Easy to customize and extend
 - 📱 Mobile-friendly interface
 - 🛠️ Simple integration with Window AI API
-
+- 😀 Emojis and Typeback animation!
 ## Getting Started
 
 ### Clone the Repository
