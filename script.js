@@ -1,8 +1,55 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Markdown configuration
+    marked.setOptions({
+        highlight: function(code, lang) {
+            if (lang && hljs.getLanguage(lang)) {
+                return hljs.highlight(code, { language: lang }).value;
+            }
+            return hljs.highlightAuto(code).value;
+        },
+        breaks: true
+    });
+
     // Core DOM elements
     const messageInput = document.querySelector('#messageInput');
     const sendButton = document.querySelector('#sendButton');
     const chatMessages = document.querySelector('#chatMessages');
+
+    // Emoji picker functionality
+    const emojiButton = document.querySelector('#emojiButton');
+    const emojiPicker = document.querySelector('emoji-picker');
+    let isEmojiPickerVisible = false;
+
+    emojiButton.addEventListener('click', () => {
+        isEmojiPickerVisible = !isEmojiPickerVisible;
+        emojiPicker.style.display = isEmojiPickerVisible ? 'block' : 'none';
+    });
+
+    emojiPicker.addEventListener('emoji-click', event => {
+        const emoji = event.detail.unicode;
+        const cursorPosition = messageInput.selectionStart;
+        const textBeforeCursor = messageInput.value.substring(0, cursorPosition);
+        const textAfterCursor = messageInput.value.substring(cursorPosition);
+        
+        messageInput.value = textBeforeCursor + emoji + textAfterCursor;
+        messageInput.focus();
+        
+        // Set cursor position after emoji
+        const newCursorPosition = cursorPosition + emoji.length;
+        messageInput.setSelectionRange(newCursorPosition, newCursorPosition);
+        
+        // Hide emoji picker after selection
+        isEmojiPickerVisible = false;
+        emojiPicker.style.display = 'none';
+    });
+
+    // Close emoji picker when clicking outside
+    document.addEventListener('click', (event) => {
+        if (!emojiPicker.contains(event.target) && !emojiButton.contains(event.target)) {
+            isEmojiPickerVisible = false;
+            emojiPicker.style.display = 'none';
+        }
+    });
 
     /**
      * Adds a message to the chat interface
@@ -22,7 +69,27 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add message content
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        contentDiv.textContent = message;
+        
+        if (isUser) {
+            contentDiv.textContent = message;
+        } else {
+            // Parse markdown and render HTML for AI messages
+            contentDiv.innerHTML = marked.parse(message);
+            
+            // Render math expressions
+            renderMathInElement(contentDiv, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false}
+                ],
+                throwOnError: false
+            });
+            
+            // Apply syntax highlighting to code blocks
+            contentDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
         
         div.appendChild(contentDiv);
         div.appendChild(timeSpan);
@@ -38,19 +105,16 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     async function waitForWindowAI(timeout = 2000) {
         return new Promise((resolve) => {
-            // Check if Window AI is already available
             if (window.ai) {
                 console.log('Window AI found immediately');
                 return resolve(true);
             }
 
-            // Set timeout for waiting
             const timeoutId = setTimeout(() => {
                 console.log('Window AI wait timed out');
                 resolve(false);
             }, timeout);
 
-            // Check periodically for Window AI
             const interval = setInterval(() => {
                 if (window.ai) {
                     console.log('Window AI found during interval check');
@@ -66,19 +130,21 @@ document.addEventListener('DOMContentLoaded', function() {
      * Gets a response from the AI using Window AI extension
      * @param {string} message - The user's message to send to AI
      * @returns {Promise<string>} - The AI's response
-     * @throws {Error} - If Window AI is not available or other errors occur
      */
     async function getAIResponse(message) {
         try {
             const isAvailable = await waitForWindowAI();
             if (!isAvailable) {
-                throw new Error('Window AI not available. Please check the extension is enabled.');
+                throw new Error('Window AI not available');
             }
 
-            // Show loading state
+            // Add error handling for empty or invalid messages
+            if (!message || typeof message !== 'string') {
+                throw new Error('Invalid message format');
+            }
+            
             sendButton.innerHTML = '<span class="loading">...</span>';
             
-            // Make request to Window AI
             const response = await window.ai.generateText({
                 messages: [{
                     role: "user",
@@ -87,13 +153,43 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             console.log('AI Response:', response);
-            return response[0].message.content;
+
+            if (!response) {
+                return 'No response received from the AI model.';
+            }
+
+            if (typeof response === 'string') {
+                return response;
+            }
+
+            if (response.choices?.[0]?.message?.content) {
+                return response.choices[0].message.content;
+            }
+
+            if (Array.isArray(response) && response.length > 0) {
+                if (typeof response[0] === 'string') {
+                    return response[0];
+                }
+                if (response[0]?.message?.content) {
+                    return response[0].message.content;
+                }
+            }
+
+            if (typeof response === 'object') {
+                if (response.text) return response.text;
+                if (response.content) return response.content;
+                if (response.message?.content) return response.message.content;
+            }
+
+            return `Received response in unknown format: ${JSON.stringify(response)}`;
 
         } catch (error) {
             console.error('Generation error:', error);
-            throw error;
+            const errorMessage = error && typeof error === 'object' ? 
+                error.message || 'Unknown error' : 
+                String(error);
+            return `Error: ${errorMessage}`;
         } finally {
-            // Reset button
             sendButton.textContent = 'Send';
         }
     }
@@ -104,26 +200,40 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     async function handleMessage(userMessage) {
         try {
-            // Disable input while processing
             messageInput.disabled = true;
             sendButton.disabled = true;
 
-            // Display user message and get AI response
             addMessageToChat(userMessage, true);
+            
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'typing-indicator';
+            typingIndicator.innerHTML = '<span></span><span></span><span></span>';
+            chatMessages.appendChild(typingIndicator);
+            typingIndicator.style.display = 'flex';
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
             const aiResponse = await getAIResponse(userMessage);
-            addMessageToChat(aiResponse, false);
+            
+            typingIndicator.remove();
+            
+            if (aiResponse) {
+                addMessageToChat(aiResponse, false);
+            } else {
+                addMessageToChat('Sorry, I received no response. Please try again.', false);
+            }
 
         } catch (error) {
-            addMessageToChat(`Error: ${error.message}`, false);
+            console.error('Chat error:', error);
+            addMessageToChat('An error occurred. Please try again.', false);
         } finally {
-            // Re-enable input
             messageInput.disabled = false;
             sendButton.disabled = false;
             messageInput.focus();
         }
     }
 
-    // Event listener for send button
+    // Event listeners
     sendButton.addEventListener('click', () => {
         const message = messageInput.value.trim();
         if (message) {
@@ -132,7 +242,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Event listener for Enter key
     messageInput.addEventListener('keyup', (event) => {
         if (event.key === 'Enter' && messageInput.value.trim()) {
             const message = messageInput.value.trim();
@@ -141,7 +250,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Initialize chat interface
+    document.querySelector('.clear-chat').addEventListener('click', () => {
+        const confirmation = confirm('⚠️ Warning: This will permanently delete all chat messages. Are you sure you want to continue?');
+        
+        if (confirmation) {
+            try {
+                chatMessages.innerHTML = '';
+                addMessageToChat('Chat history has been cleared. Start a new conversation!', false);
+            } catch (error) {
+                console.error('Error clearing chat:', error);
+                alert('An error occurred while clearing the chat. Please try again.');
+            }
+        }
+    });
+
+    // Initialize chat
     waitForWindowAI().then(isAvailable => {
         if (isAvailable) {
             addMessageToChat('Ready to chat! Type your message to begin.', false);
