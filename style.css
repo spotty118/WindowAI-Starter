@@ -339,3 +339,51 @@ emoji-picker {
         --num-columns: 6;         /* Fewer columns on mobile */
     }
 }
+
+.button {
+    padding: 12px 20px; /* Increased padding for buttons */
+    transition: background-color 0.3s; /* Smooth transition for hover effect */
+}
+
+.button:hover {
+    background-color: #0056b3; /* Darker shade on hover */
+}
+
+.container {
+    margin: 20px; /* Increased margin for containers */
+}
+
+.text {
+    font-size: 16px; /* Consistent font size */
+    line-height: 1.6; /* Improved line height for readability */
+}
+
+/* Add focus styles for accessibility */
+input:focus, button:focus {
+    outline: 2px solid #007AFF; /* Clear focus indication */
+}
+
+/* Update button styles for better visibility */
+.button, .clear-chat {
+    transition: background-color 0.3s, transform 0.2s; /* Smooth transition for hover and active states */
+}
+
+.loading {
+    display: inline-block;
+    animation: ellipsis 1.4s infinite;
+}
+
+@keyframes ellipsis {
+    0% { content: "."; }
+    33% { content: ".."; }
+    66% { content: "..."; }
+}
+
+/* Fix emoji picker positioning */
+.emoji-picker {
+    position: absolute;
+    bottom: 100%;
+    left: 20px;
+    z-index: 1000;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}

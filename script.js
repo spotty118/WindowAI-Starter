@@ -76,14 +76,19 @@ document.addEventListener('DOMContentLoaded', function() {
             // Parse markdown and render HTML for AI messages
             contentDiv.innerHTML = marked.parse(message);
             
-            // Render math expressions
-            renderMathInElement(contentDiv, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false}
-                ],
-                throwOnError: false
-            });
+            // Fix: Wrap KaTeX rendering in try-catch
+            try {
+                renderMathInElement(contentDiv, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false}
+                    ],
+                    throwOnError: false,
+                    output: 'html'
+                });
+            } catch (error) {
+                console.error('Math rendering error:', error);
+            }
             
             // Apply syntax highlighting to code blocks
             contentDiv.querySelectorAll('pre code').forEach((block) => {
