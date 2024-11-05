@@ -3,32 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI Chat Interface">
+    <meta name="theme-color" content="#007AFF">
+    
     <title>AI Chat</title>
+    
+    <!-- Preload critical assets -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Existing stylesheets -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" defer></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="chat-container">
-        <div id="chatMessages"></div>
+    <main class="chat-container">
+        <div id="chatMessages" role="log" aria-live="polite"></div>
         <div class="input-area">
-            <button id="emojiButton">😊</button>
-            <emoji-picker class="emoji-picker"></emoji-picker>
+            <button id="emojiButton" aria-label="Open emoji picker">😊</button>
+            <emoji-picker class="emoji-picker" aria-hidden="true"></emoji-picker>
             <input type="text" 
                    id="messageInput" 
                    placeholder="Type your message..." 
                    autocomplete="off"
+                   aria-label="Message input"
                    autofocus>
-            <button id="sendButton">Send</button>
-            <button class="clear-chat">Clear Chat</button>
+            <button id="sendButton" aria-label="Send message">Send</button>
+            <button class="clear-chat" aria-label="Clear chat history">Clear Chat</button>
         </div>
-    </div>
-    <script src="script.js"></script>
+    </main>
+    
+    <!-- Load scripts in optimal order -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" defer></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+    <script src="script.js" defer></script>
 </body>
 </html>

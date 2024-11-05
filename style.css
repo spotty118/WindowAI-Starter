@@ -387,3 +387,50 @@ input:focus, button:focus {
     z-index: 1000;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
+
+/* Add CSS variables for consistent theming */
+:root {
+    --primary-color: #007AFF;
+    --primary-hover: #0056b3;
+    --background-gradient: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
+    --shadow-color: rgba(0, 0, 0, 0.08);
+    --border-radius: 12px;
+    --transition-speed: 0.3s;
+}
+
+/* Optimize animations with transform */
+.user-message, .ai-message, #sendButton, .clear-chat {
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+/* Add hardware acceleration for smooth scrolling */
+#chatMessages {
+    -webkit-overflow-scrolling: touch;
+    transform: translateZ(0);
+}
+
+/* Optimize media queries */
+@media screen and (max-width: 768px) {
+    :root {
+        --border-radius: 8px;
+    }
+    
+    .chat-container {
+        width: 100%;
+        height: calc(100vh - 20px);
+        margin: 10px;
+    }
+}
+
+/* Add print styles */
+@media print {
+    .input-area, .clear-chat, #emojiButton {
+        display: none;
+    }
+    
+    .chat-container {
+        box-shadow: none;
+        height: auto;
+    }
+}

@@ -199,44 +199,64 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    /**
-     * Handles the complete message flow from user input to AI response
-     * @param {string} userMessage - The user's message
-     */
+    // Add message debouncing to prevent spam
+    const debounce = (func, wait) => {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    };
+
+    // Optimize message handling with better error handling and loading states
     async function handleMessage(userMessage) {
         try {
-            messageInput.disabled = true;
-            sendButton.disabled = true;
-
+            if (!userMessage.trim()) return;
+            
+            // Update UI state
+            const uiState = {
+                messageInput,
+                sendButton,
+                typingIndicator: document.createElement('div')
+            };
+            
+            setLoadingState(true, uiState);
             addMessageToChat(userMessage, true);
             
-            const typingIndicator = document.createElement('div');
-            typingIndicator.className = 'typing-indicator';
-            typingIndicator.innerHTML = '<span></span><span></span><span></span>';
-            chatMessages.appendChild(typingIndicator);
-            typingIndicator.style.display = 'flex';
-            
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            // Show typing indicator
+            uiState.typingIndicator.className = 'typing-indicator';
+            uiState.typingIndicator.innerHTML = '<span></span><span></span><span></span>';
+            chatMessages.appendChild(uiState.typingIndicator);
+            scrollToBottom();
             
             const aiResponse = await getAIResponse(userMessage);
             
-            typingIndicator.remove();
+            // Clean up and show response
+            uiState.typingIndicator.remove();
+            addMessageToChat(aiResponse || 'Sorry, I received no response. Please try again.', false);
             
-            if (aiResponse) {
-                addMessageToChat(aiResponse, false);
-            } else {
-                addMessageToChat('Sorry, I received no response. Please try again.', false);
-            }
-
         } catch (error) {
             console.error('Chat error:', error);
             addMessageToChat('An error occurred. Please try again.', false);
         } finally {
-            messageInput.disabled = false;
-            sendButton.disabled = false;
-            messageInput.focus();
+            setLoadingState(false, { messageInput, sendButton });
+            scrollToBottom();
         }
     }
+
+    // Helper function to manage loading states
+    function setLoadingState(isLoading, elements) {
+        elements.messageInput.disabled = isLoading;
+        elements.sendButton.disabled = isLoading;
+        if (!isLoading) elements.messageInput.focus();
+    }
+
+    // Helper function to scroll chat to bottom
+    const scrollToBottom = () => chatMessages.scrollTop = chatMessages.scrollHeight;
 
     // Event listeners
     sendButton.addEventListener('click', () => {
