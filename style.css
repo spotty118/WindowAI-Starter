@@ -27,6 +27,7 @@ body {
     border-radius: 16px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
     overflow: hidden;
+    contain: content;
 }
 
 #chatMessages {
@@ -35,6 +36,9 @@ body {
     padding: 20px;
     background: white;
     scroll-behavior: smooth;
+    contain: strict;
+    content-visibility: auto;
+    contain-intrinsic-size: 0 500px;
 }
 
 .user-message, .ai-message {
@@ -46,6 +50,8 @@ body {
     position: relative;
     font-size: 15px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .user-message {
@@ -433,4 +439,22 @@ input:focus, button:focus {
         box-shadow: none;
         height: auto;
     }
+}
+
+/* Use transform instead of opacity/visibility for hidden elements */
+.hidden {
+    transform: translateX(-9999px);
+    position: absolute;
+}
+
+/* Optimize animations to use transform and opacity only */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Add layer promotion only where necessary */
+.user-message, .ai-message {
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }

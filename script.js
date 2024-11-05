@@ -100,6 +100,20 @@ document.addEventListener('DOMContentLoaded', function() {
         div.appendChild(timeSpan);
         
         chatMessages.appendChild(div);
+        messageObserver.observe(div);
+        
+        // Cleanup old messages
+        cleanupMessageHistory();
+        
+        // Clear unnecessary references
+        if (window.requestIdleCallback) {
+            requestIdleCallback(() => {
+                div = null;
+                contentDiv = null;
+                timeSpan = null;
+            });
+        }
+        
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
@@ -297,4 +311,66 @@ document.addEventListener('DOMContentLoaded', function() {
             addMessageToChat('Waiting for Window AI extension...', false);
         }
     });
+
+    // Add these memory management functions
+    function cleanupMessageHistory() {
+        // Limit chat history to last 100 messages to prevent memory bloat
+        const messages = chatMessages.children;
+        const maxMessages = 100;
+        
+        if (messages.length > maxMessages) {
+            for (let i = 0; i < messages.length - maxMessages; i++) {
+                messages[0].remove();
+            }
+        }
+    }
+
+    // Add message observer to monitor DOM size
+    const messageObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) {
+                // Temporarily remove content from invisible messages
+                const message = entry.target;
+                if (!message.dataset.originalContent) {
+                    message.dataset.originalContent = message.innerHTML;
+                    message.innerHTML = '';
+                }
+            } else {
+                // Restore content when message becomes visible
+                const message = entry.target;
+                if (message.dataset.originalContent) {
+                    message.innerHTML = message.dataset.originalContent;
+                    delete message.dataset.originalContent;
+                }
+            }
+        });
+    }, {
+        root: chatMessages,
+        rootMargin: '100px'
+    });
+
+    // Add event listener cleanup on page unload
+    window.addEventListener('unload', () => {
+        messageObserver.disconnect();
+        // Clear any remaining timeouts
+        if (window.debounceTimeout) clearTimeout(window.debounceTimeout);
+    });
+
+    // Optimize image handling in messages
+    function optimizeImages() {
+        const images = chatMessages.getElementsByTagName('img');
+        Array.from(images).forEach(img => {
+            img.loading = 'lazy';
+            img.decoding = 'async';
+        });
+    }
+
+    // Add periodic cleanup
+    setInterval(() => {
+        if (document.hidden) {
+            cleanupMessageHistory();
+            // Force garbage collection of detached DOM elements
+            if (window.gc) window.gc();
+        }
+    }, 60000); // Run every minute when tab is hidden
 });

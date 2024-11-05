@@ -17,10 +17,23 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <link rel="stylesheet" href="style.css">
+    
+    <!-- Add memory management meta tags -->
+    <meta http-equiv="Cache-Control" content="no-store">
+    <meta name="memory-management" content="aggressive">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" as="style" href="style.css">
+    <link rel="preload" as="script" href="script.js">
 </head>
 <body>
     <main class="chat-container">
-        <div id="chatMessages" role="log" aria-live="polite"></div>
+        <div id="chatMessages" 
+             role="log" 
+             aria-live="polite"
+             data-memory-cleanup="true">
+            <!-- Messages will be added here -->
+        </div>
         <div class="input-area">
             <button id="emojiButton" aria-label="Open emoji picker">😊</button>
             <emoji-picker class="emoji-picker" aria-hidden="true"></emoji-picker>
