@@ -689,3 +689,22 @@ select:disabled {
     cursor: not-allowed;
 }
 
+/* Prefer transform over layout-changing properties */
+/* Bad */
+.animated {
+    animation: slide 1s;
+}
+@keyframes slide {
+    from { left: 0; }
+    to { left: 100px; }
+}
+
+/* Good */
+.animated {
+    animation: slide 1s;
+}
+@keyframes slide {
+    from { transform: translateX(0); }
+    to { transform: translateX(100px); }
+}
+

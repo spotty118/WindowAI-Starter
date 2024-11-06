@@ -632,3 +632,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Any scroll handlers if needed
     }, { passive: true });
 });
+
+// Break out of loops when possible
+function findItem(array, target) {
+    for (let i = 0; i < array.length; i++) {
+        if (array[i] === target) {
+            return array[i];
+        }
+    }
+}
