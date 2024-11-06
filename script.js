@@ -117,7 +117,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Cache management
     class PromptCache {
-        constructor(maxSize = 100) {
+        constructor(maxSize = 50) {
             this.cache = new Map();
             this.provider = null;
             this.maxSize = maxSize;
@@ -126,24 +126,23 @@ document.addEventListener('DOMContentLoaded', function() {
         setProvider(provider) {
             if (this.provider !== provider) {
                 this.cache.clear();
+                this.provider = provider;
             }
-            this.provider = provider;
         }
 
         async getResponse(message) {
             const cacheKey = JSON.stringify({ provider: this.provider, message });
-            if (this.cache.has(cacheKey)) {
-                return this.cache.get(cacheKey);
-            }
-            return null;
+            return this.cache.get(cacheKey) || null;
         }
 
         setResponse(message, response) {
-            if (this.cache.size >= this.maxSize) {
-                const firstKey = this.cache.keys().next().value;
-                this.cache.delete(firstKey);
-            }
             const cacheKey = JSON.stringify({ provider: this.provider, message });
+            
+            if (this.cache.size >= this.maxSize) {
+                const oldestKey = this.cache.keys().next().value;
+                this.cache.delete(oldestKey);
+            }
+            
             this.cache.set(cacheKey, response);
         }
     }
@@ -243,14 +242,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Helper function to scroll chat to bottom
     function scrollToBottom(force = false) {
         const chatMessages = document.querySelector('#chatMessages');
-        
         if (!chatMessages) return;
 
-        // Check if user is near the bottom
         const isNearBottom = 
             chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
         
-        // Scroll only if near bottom or force is true
         if (force || isNearBottom) {
             requestAnimationFrame(() => {
                 chatMessages.scrollTo({
@@ -270,12 +266,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Implement a debounce function for message input
+    function debounce(func, delay) {
+        let timeoutId;
+        return function (...args) {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+
+    const debouncedHandleMessage = debounce(handleMessage, 300);
+
     messageInput.addEventListener('keyup', (event) => {
         if (event.key === 'Enter' && !event.shiftKey && messageInput.value.trim()) {
             event.preventDefault();
             const message = messageInput.value.trim();
             messageInput.value = '';
-            handleMessage(message);
+            debouncedHandleMessage(message);
         }
     });
 
@@ -510,7 +517,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Memory management functions
     function cleanupMessageHistory() {
         const messages = chatMessages.children;
-        const maxMessages = 100;
+        const maxMessages = 50;
         
         if (messages.length > maxMessages) {
             const fragment = document.createDocumentFragment();
@@ -525,16 +532,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add message observer to monitor DOM size
     const messageObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
+            const message = entry.target;
             if (!entry.isIntersecting) {
                 // Temporarily remove content from invisible messages
-                const message = entry.target;
                 if (!message.dataset.originalContent) {
                     message.dataset.originalContent = message.innerHTML;
                     message.innerHTML = '';
                 }
             } else {
                 // Restore content when message becomes visible
-                const message = entry.target;
                 if (message.dataset.originalContent) {
                     message.innerHTML = message.dataset.originalContent;
                     delete message.dataset.originalContent;
@@ -543,7 +549,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, {
         root: chatMessages,
-        rootMargin: '100px'
+        rootMargin: '100px',
+        threshold: 0
     });
 
     // Observe messages for memory management

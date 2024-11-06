@@ -44,6 +44,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    will-change: scroll-position;
 }
 
 /* Message styling */
@@ -605,7 +606,9 @@ input:focus, button:focus, select:focus, textarea:focus {
 }
 
 #chatMessages {
-    contain: content;
+    scroll-behavior: smooth;
+    overflow-y: auto;
+    will-change: scroll-position;
     content-visibility: auto;
     contain-intrinsic-size: 0 500px;
 }
