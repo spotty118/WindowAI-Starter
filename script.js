@@ -155,9 +155,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Cache management
     class PromptCache {
-        constructor() {
+        constructor(maxSize = 100) {
             this.cache = new Map();
             this.provider = null;
+            this.maxSize = maxSize;
         }
 
         setProvider(provider) {
@@ -176,6 +177,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         setResponse(message, response) {
+            if (this.cache.size >= this.maxSize) {
+                const firstKey = this.cache.keys().next().value;
+                this.cache.delete(firstKey);
+            }
             const cacheKey = JSON.stringify({ provider: this.provider, message });
             this.cache.set(cacheKey, response);
         }
@@ -355,16 +360,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Function to close the prompt builder
         function closePromptBuilder(event) {
-            if (event && typeof event.stopPropagation === 'function') {
-                event.stopPropagation(); // Prevent event bubbling
+            if (event?.stopPropagation) {
+                event.stopPropagation();
             }
             promptBuilderOverlay.classList.remove('visible');
             promptBuilderOverlay.classList.add('hidden');
             
-            // Return focus to the toggle button after the modal is hidden
-            setTimeout(() => {
+            // Ensure focus is returned after animation
+            requestAnimationFrame(() => {
                 toggleButton.focus();
-            }, 300); // Delay to allow CSS transition
+            });
         }
 
         // Toggle prompt builder on button click
@@ -444,8 +449,8 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         // Handle template selection
-        if (promptTemplate) {
-            promptTemplate.addEventListener('change', (e) => {
+        promptTemplate.addEventListener('change', (e) => {
+            try {
                 const selected = templates[e.target.value];
                 if (!selected) {
                     promptFields.innerHTML = '';
@@ -482,71 +487,58 @@ document.addEventListener('DOMContentLoaded', function() {
                         `;
                     }
                 }).join('');
-            });
-        }
+            } catch (error) {
+                console.error('Error handling template selection:', error);
+                promptFields.innerHTML = '';
+            }
+        });
 
-        // Handle prompt insertion (Updated with validation)
+        // Handle prompt insertion with validation
         if (insertPrompt) {
             insertPrompt.addEventListener('click', () => {
-                const selected = templates[promptTemplate.value];
-                if (!selected) return;
+                try {
+                    const selected = templates[promptTemplate.value];
+                    if (!selected) return;
 
-                let prompt = selected.template;
-                const missingFields = [];
+                    let prompt = selected.template;
 
-                // Clear previous error messages
-                promptBuilder.querySelectorAll('.error-message').forEach(span => {
-                    span.textContent = '';
-                    span.style.display = 'none';
-                });
-                promptBuilder.querySelectorAll('.input-error').forEach(input => {
-                    input.classList.remove('input-error');
-                });
+                    // Clear previous errors
+                    clearValidationErrors();
 
-                selected.fields.forEach(field => {
-                    const input = document.querySelector(`#${field.name}`);
-                    if (input) {
-                        const value = input.value.trim();
-                        if (!value) {
-                            missingFields.push(field.label);
-                            input.classList.add('input-error');
-                            const errorSpan = input.nextElementSibling;
-                            if (errorSpan) {
-                                errorSpan.textContent = `${field.label} is required.`;
-                                errorSpan.style.display = 'block';
-                            }
-                        }
-                        prompt = prompt.replace(`{${field.name}}`, value || `{${field.name}}`);
+                    // Validate and collect field values
+                    const fieldValues = validateFields(selected.fields);
+
+                    if (fieldValues.missingFields.length > 0) {
+                        handleMissingFields(fieldValues.missingFields);
+                        return;
                     }
-                });
 
-                if (missingFields.length > 0) {
-                    // Focus on the first missing field
-                    const firstMissingField = selected.fields.find(field => missingFields.includes(field.label));
-                    if (firstMissingField) {
-                        const firstInput = document.querySelector(`#${firstMissingField.name}`);
-                        if (firstInput) firstInput.focus();
-                    }
-                    return; // Exit without inserting the prompt
+                    // Build prompt with validated values
+                    prompt = buildPromptString(prompt, fieldValues.values);
+
+                    messageInput.value = prompt;
+                    closePromptBuilder();
+                    messageInput.focus();
+                } catch (error) {
+                    console.error('Error in prompt builder:', error);
+                    showErrorMessage('Failed to build prompt. Please try again.');
                 }
-
-                messageInput.value = prompt;
-                closePromptBuilder(); // Close the modal
-                messageInput.focus();
             });
         }
     }
 
     // Memory management functions
     function cleanupMessageHistory() {
-        // Limit chat history to last 100 messages to prevent memory bloat
         const messages = chatMessages.children;
         const maxMessages = 100;
         
         if (messages.length > maxMessages) {
-            for (let i = 0; i < messages.length - maxMessages; i++) {
-                messages[0].remove();
-            }
+            const fragment = document.createDocumentFragment();
+            Array.from(messages)
+                .slice(-maxMessages)
+                .forEach(msg => fragment.appendChild(msg));
+            chatMessages.innerHTML = '';
+            chatMessages.appendChild(fragment);
         }
     }
 
@@ -612,7 +604,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(() => {
         if (document.hidden) {
             cleanupMessageHistory();
-            // Force garbage collection of detached DOM elements
+            // Force garbage collection of detached DOM elements if supported
             if (window.gc) window.gc();
         }
     }, 60000); // Run every minute when tab is hidden
@@ -632,12 +624,3 @@ document.addEventListener('DOMContentLoaded', function() {
         // Any scroll handlers if needed
     }, { passive: true });
 });
-
-// Break out of loops when possible
-function findItem(array, target) {
-    for (let i = 0; i < array.length; i++) {
-        if (array[i] === target) {
-            return array[i];
-        }
-    }
-}

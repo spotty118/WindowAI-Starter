@@ -39,8 +39,15 @@
             <!-- Messages will be added here -->
         </div>
         <div class="input-area">
-            <button id="emojiButton" aria-label="Open emoji picker" title="Emoji Picker">😊</button>
-            <emoji-picker class="emoji-picker" aria-hidden="true"></emoji-picker>
+            <button id="emojiButton" 
+                    aria-label="Open emoji picker" 
+                    title="Emoji Picker"
+                    aria-expanded="false">😊</button>
+            <emoji-picker class="emoji-picker" 
+                          aria-hidden="true"
+                          role="dialog"
+                          aria-label="Emoji picker">
+            </emoji-picker>
             <button id="togglePromptBuilder" 
                     class="prompt-builder-toggle" 
                     aria-label="Open prompt builder" 

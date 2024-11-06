@@ -30,6 +30,9 @@ body {
     box-shadow: 0 8px 30px var(--shadow-color);
     overflow: hidden;
     contain: content;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
 }
 
 .chat-header {
@@ -294,10 +297,16 @@ body {
 @media (max-width: 480px) {
     .input-area {
         gap: 8px;
+        padding: 10px;
     }
     
     #sendButton, .clear-chat {
         padding: 10px 12px;
+    }
+
+    .prompt-builder {
+        width: 95%;
+        margin: 10px;
     }
 }
 
@@ -602,13 +611,17 @@ input:focus, button:focus, select:focus, textarea:focus {
 
 /* Optimize animations */
 .user-message, .ai-message, #sendButton, .clear-chat, .prompt-builder-toggle {
-    will-change: transform;
+    will-change: transform, opacity;
     transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+    transition: transform 0.2s ease-out;
 }
 
 #chatMessages {
-    -webkit-overflow-scrolling: touch;
-    transform: translateZ(0);
+    contain: content;
+    content-visibility: auto;
+    contain-intrinsic-size: 0 500px;
 }
 
 /* Responsive adjustments */
@@ -627,10 +640,16 @@ input:focus, button:focus, select:focus, textarea:focus {
 @media screen and (max-width: 480px) {
     .input-area {
         gap: 8px;
+        padding: 10px;
     }
     
     #sendButton, .clear-chat {
         padding: 10px 12px;
+    }
+
+    .prompt-builder {
+        width: 95%;
+        margin: 10px;
     }
 }
 
@@ -687,24 +706,5 @@ input:focus, button:focus, select:focus, textarea:focus {
 select:disabled {
     opacity: 0.7;
     cursor: not-allowed;
-}
-
-/* Prefer transform over layout-changing properties */
-/* Bad */
-.animated {
-    animation: slide 1s;
-}
-@keyframes slide {
-    from { left: 0; }
-    to { left: 100px; }
-}
-
-/* Good */
-.animated {
-    animation: slide 1s;
-}
-@keyframes slide {
-    from { transform: translateX(0); }
-    to { transform: translateX(100px); }
 }
 
