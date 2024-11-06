@@ -56,65 +56,63 @@ document.addEventListener('DOMContentLoaded', function() {
      * @param {string} message - The message text to display
      * @param {boolean} isUser - True if message is from user, false if from AI
      */
-    function addMessageToChat(message, isUser = true) {
-        const div = document.createElement('div');
-        div.className = isUser ? 'user-message' : 'ai-message';
-        
-        // Add timestamp
-        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'timestamp';
-        timeSpan.textContent = timestamp;
-        
-        // Add message content
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'message-content';
-        
-        if (isUser) {
-            contentDiv.textContent = message;
-        } else {
-            // Parse markdown and render HTML for AI messages
-            contentDiv.innerHTML = marked.parse(message);
+    async function addMessageToChat(message, isUser = true) {
+        try {
+            const div = document.createElement('div');
+            div.className = isUser ? 'user-message' : 'ai-message';
             
-            // Fix: Wrap KaTeX rendering in try-catch
-            try {
-                renderMathInElement(contentDiv, {
-                    delimiters: [
-                        {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false}
-                    ],
-                    throwOnError: false,
-                    output: 'html'
-                });
-            } catch (error) {
-                console.error('Math rendering error:', error);
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            // Add timestamp
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'timestamp';
+            timeSpan.textContent = new Date().toLocaleTimeString();
+            
+            if (isUser) {
+                contentDiv.textContent = message;
+            } else {
+                const messageStr = typeof message === 'string' ? message : String(message);
+                
+                try {
+                    marked.use({
+                        gfm: true,
+                        breaks: true,
+                        headerIds: true,
+                        mangle: false
+                    });
+                    
+                    contentDiv.innerHTML = marked.parse(messageStr);
+                    
+                    if (window.renderMathInElement) {
+                        renderMathInElement(contentDiv, {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false}
+                            ],
+                            throwOnError: false
+                        });
+                    }
+                } catch (parseError) {
+                    console.error('Markdown parsing error:', parseError);
+                    contentDiv.textContent = messageStr;
+                }
             }
             
-            // Apply syntax highlighting to code blocks
-            contentDiv.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightElement(block);
-            });
+            // Append content and timestamp in correct order
+            div.appendChild(contentDiv);
+            div.appendChild(timeSpan);
+            
+            chatMessages.appendChild(div);
+            scrollToBottom();
+            
+        } catch (error) {
+            console.error('Failed to add message to chat:', error);
+            const errorDiv = document.createElement('div');
+            errorDiv.className = isUser ? 'user-message' : 'ai-message';
+            errorDiv.textContent = typeof message === 'string' ? message : 'Error displaying message';
+            chatMessages.appendChild(errorDiv);
         }
-        
-        div.appendChild(contentDiv);
-        div.appendChild(timeSpan);
-        
-        chatMessages.appendChild(div);
-        messageObserver.observe(div);
-        
-        // Cleanup old messages
-        cleanupMessageHistory();
-        
-        // Clear unnecessary references
-        if (window.requestIdleCallback) {
-            requestIdleCallback(() => {
-                div = null;
-                contentDiv = null;
-                timeSpan = null;
-            });
-        }
-        
-        chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     /**
@@ -122,95 +120,150 @@ document.addEventListener('DOMContentLoaded', function() {
      * @param {number} timeout - Maximum time to wait in milliseconds
      * @returns {Promise<boolean>} - Resolves to true if Window AI is available, false if timeout
      */
-    async function waitForWindowAI(timeout = 2000) {
+    async function waitForWindowAI(timeout = 5000) {
         return new Promise((resolve) => {
             if (window.ai) {
                 console.log('Window AI found immediately');
-                return resolve(true);
+                resolve(true);
+                return;
             }
 
-            const timeoutId = setTimeout(() => {
-                console.log('Window AI wait timed out');
-                resolve(false);
-            }, timeout);
-
-            const interval = setInterval(() => {
+            const start = Date.now();
+            const checker = setInterval(() => {
                 if (window.ai) {
-                    console.log('Window AI found during interval check');
-                    clearInterval(interval);
-                    clearTimeout(timeoutId);
+                    clearInterval(checker);
+                    console.log('Window AI found after waiting');
                     resolve(true);
+                } else if (Date.now() - start > timeout) {
+                    clearInterval(checker);
+                    console.log('Window AI not found after timeout');
+                    resolve(false);
                 }
             }, 100);
         });
     }
 
-    /**
-     * Gets a response from the AI using Window AI extension
-     * @param {string} message - The user's message to send to AI
-     * @returns {Promise<string>} - The AI's response
-     */
+    // Global state management
+    let isGenerating = false;
+    let currentProvider = null;
+
+    // Cache management
+    class PromptCache {
+        constructor() {
+            this.cache = new Map();
+            this.provider = null;
+        }
+
+        setProvider(provider) {
+            if (this.provider !== provider) {
+                this.cache.clear();
+            }
+            this.provider = provider;
+        }
+
+        async getResponse(message) {
+            const cacheKey = JSON.stringify({ provider: this.provider, message });
+            if (this.cache.has(cacheKey)) {
+                return this.cache.get(cacheKey);
+            }
+            return null;
+        }
+
+        setResponse(message, response) {
+            const cacheKey = JSON.stringify({ provider: this.provider, message });
+            this.cache.set(cacheKey, response);
+        }
+    }
+
+    // Initialize cache
+    const promptCache = new PromptCache();
+
+    // Message handling with proper state management
+    async function handleMessage(userMessage) {
+        if (!userMessage.trim() || isGenerating) return;
+        
+        try {
+            isGenerating = true;
+            addMessageToChat(userMessage, true);
+            
+            // Show typing indicator
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'typing-indicator';
+            typingIndicator.innerHTML = '<span></span><span></span><span></span>';
+            chatMessages.appendChild(typingIndicator);
+            
+            // Check cache first
+            const cachedResponse = await promptCache.getResponse(userMessage);
+            if (cachedResponse) {
+                addMessageToChat(cachedResponse, false);
+                return;
+            }
+
+            // Generate new response
+            const response = await getAIResponse(userMessage);
+            if (response) {
+                promptCache.setResponse(userMessage, response);
+                addMessageToChat(response, false);
+            }
+
+        } catch (error) {
+            console.error('Chat error:', error);
+            addMessageToChat('An error occurred. Please try again.', false);
+        } finally {
+            const typingIndicator = document.querySelector('.typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+            isGenerating = false;
+        }
+    }
+
+    // AI response generation with provider detection
     async function getAIResponse(message) {
         try {
-            const isAvailable = await waitForWindowAI();
-            if (!isAvailable) {
+            if (!window.ai) {
                 throw new Error('Window AI not available');
             }
 
-            // Add error handling for empty or invalid messages
-            if (!message || typeof message !== 'string') {
-                throw new Error('Invalid message format');
-            }
-            
-            sendButton.innerHTML = '<span class="loading">...</span>';
-            
             const response = await window.ai.generateText({
                 messages: [{
                     role: "user",
                     content: message
                 }]
             });
-            
-            console.log('AI Response:', response);
 
-            if (!response) {
-                return 'No response received from the AI model.';
-            }
-
-            if (typeof response === 'string') {
-                return response;
-            }
-
-            if (response.choices?.[0]?.message?.content) {
-                return response.choices[0].message.content;
-            }
-
-            if (Array.isArray(response) && response.length > 0) {
-                if (typeof response[0] === 'string') {
-                    return response[0];
-                }
-                if (response[0]?.message?.content) {
-                    return response[0].message.content;
-                }
-            }
-
-            if (typeof response === 'object') {
-                if (response.text) return response.text;
-                if (response.content) return response.content;
-                if (response.message?.content) return response.message.content;
-            }
-
-            return `Received response in unknown format: ${JSON.stringify(response)}`;
+            return processResponse(response);
 
         } catch (error) {
             console.error('Generation error:', error);
-            const errorMessage = error && typeof error === 'object' ? 
-                error.message || 'Unknown error' : 
-                String(error);
-            return `Error: ${errorMessage}`;
-        } finally {
-            sendButton.textContent = 'Send';
+            throw error;
         }
+    }
+
+    // Helper function to process response
+    function processResponse(response) {
+        if (!response) return 'No response received';
+        
+        // Handle string responses
+        if (typeof response === 'string') return response;
+        
+        // Handle array responses
+        if (Array.isArray(response)) {
+            if (response.length === 0) return 'Empty response received';
+            const firstResponse = response[0];
+            return firstResponse?.content || firstResponse?.message?.content || String(firstResponse);
+        }
+        
+        // Handle object responses
+        if (typeof response === 'object') {
+            return response.content || 
+                   response.message?.content || 
+                   response.text || 
+                   JSON.stringify(response);
+        }
+        
+        // Fallback
+        return String(response);
     }
 
     // Add message debouncing to prevent spam
@@ -225,42 +278,6 @@ document.addEventListener('DOMContentLoaded', function() {
             timeout = setTimeout(later, wait);
         };
     };
-
-    // Optimize message handling with better error handling and loading states
-    async function handleMessage(userMessage) {
-        try {
-            if (!userMessage.trim()) return;
-            
-            // Update UI state
-            const uiState = {
-                messageInput,
-                sendButton,
-                typingIndicator: document.createElement('div')
-            };
-            
-            setLoadingState(true, uiState);
-            addMessageToChat(userMessage, true);
-            
-            // Show typing indicator
-            uiState.typingIndicator.className = 'typing-indicator';
-            uiState.typingIndicator.innerHTML = '<span></span><span></span><span></span>';
-            chatMessages.appendChild(uiState.typingIndicator);
-            scrollToBottom();
-            
-            const aiResponse = await getAIResponse(userMessage);
-            
-            // Clean up and show response
-            uiState.typingIndicator.remove();
-            addMessageToChat(aiResponse || 'Sorry, I received no response. Please try again.', false);
-            
-        } catch (error) {
-            console.error('Chat error:', error);
-            addMessageToChat('An error occurred. Please try again.', false);
-        } finally {
-            setLoadingState(false, { messageInput, sendButton });
-            scrollToBottom();
-        }
-    }
 
     // Helper function to manage loading states
     function setLoadingState(isLoading, elements) {
@@ -373,4 +390,14 @@ document.addEventListener('DOMContentLoaded', function() {
             if (window.gc) window.gc();
         }
     }, 60000); // Run every minute when tab is hidden
+
+    // Add monitoring for cache usage
+    function checkCacheUsage(response) {
+        if (response.usage) {
+            console.log('Cache metrics:', {
+                cache_creation_input_tokens: response.usage.cache_creation_input_tokens,
+                cache_read_input_tokens: response.usage.cache_read_input_tokens
+            });
+        }
+    }
 });
