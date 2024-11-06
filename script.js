@@ -20,7 +20,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const emojiPicker = document.querySelector('emoji-picker');
     let isEmojiPickerVisible = false;
 
-    emojiButton.addEventListener('click', () => {
+    emojiButton.addEventListener('click', (event) => {
+        event.stopPropagation(); // Prevent event bubbling
         isEmojiPickerVisible = !isEmojiPickerVisible;
         emojiPicker.style.display = isEmojiPickerVisible ? 'block' : 'none';
     });
@@ -49,6 +50,11 @@ document.addEventListener('DOMContentLoaded', function() {
             isEmojiPickerVisible = false;
             emojiPicker.style.display = 'none';
         }
+    });
+
+    emojiPicker.addEventListener('error', (e) => {
+        console.warn('Emoji picker failed to load:', e);
+        emojiButton.style.display = 'none'; // Hide emoji button if picker fails
     });
 
     /**
@@ -191,6 +197,7 @@ document.addEventListener('DOMContentLoaded', function() {
             typingIndicator.className = 'typing-indicator';
             typingIndicator.innerHTML = '<span></span><span></span><span></span>';
             chatMessages.appendChild(typingIndicator);
+            scrollToBottom();
             
             // Check cache first
             const cachedResponse = await promptCache.getResponse(userMessage);
@@ -266,26 +273,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return String(response);
     }
 
-    // Add message debouncing to prevent spam
-    const debounce = (func, wait) => {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    };
-
-    // Helper function to manage loading states
-    function setLoadingState(isLoading, elements) {
-        elements.messageInput.disabled = isLoading;
-        elements.sendButton.disabled = isLoading;
-        if (!isLoading) elements.messageInput.focus();
-    }
-
     // Helper function to scroll chat to bottom
     const scrollToBottom = () => chatMessages.scrollTop = chatMessages.scrollHeight;
 
@@ -299,7 +286,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     messageInput.addEventListener('keyup', (event) => {
-        if (event.key === 'Enter' && messageInput.value.trim()) {
+        if (event.key === 'Enter' && !event.shiftKey && messageInput.value.trim()) {
+            event.preventDefault();
             const message = messageInput.value.trim();
             messageInput.value = '';
             handleMessage(message);
@@ -329,7 +317,227 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Add these memory management functions
+    // Prompt builder functionality
+    const promptBuilderOverlay = document.querySelector('.prompt-builder-overlay');
+    const promptBuilder = document.querySelector('.prompt-builder');
+    const toggleButton = document.querySelector('#togglePromptBuilder');
+    const closeButton = document.querySelector('.close-prompt');
+    const promptTemplate = document.querySelector('#promptTemplate');
+    const promptFields = document.querySelector('#promptFields');
+    const insertPrompt = document.querySelector('#insertPrompt');
+
+    // Debug logging
+    console.log('Elements found:', {
+        promptBuilderOverlay: !!promptBuilderOverlay,
+        promptBuilder: !!promptBuilder,
+        toggleButton: !!toggleButton,
+        closeButton: !!closeButton,
+        promptTemplate: !!promptTemplate,
+        promptFields: !!promptFields,
+        insertPrompt: !!insertPrompt
+    });
+
+    if (!promptBuilderOverlay || !promptBuilder || !toggleButton) {
+        console.error('Prompt builder overlay, prompt builder, or toggle button not found');
+    } else {
+        // Function to open the prompt builder
+        function openPromptBuilder(event) {
+            event.stopPropagation(); // Prevent event bubbling
+            promptBuilderOverlay.classList.remove('hidden');
+            promptBuilderOverlay.classList.add('visible');
+            
+            // Move focus to the first input field after the modal is visible
+            setTimeout(() => {
+                const firstInput = promptBuilder.querySelector('input, select, textarea');
+                if (firstInput) firstInput.focus();
+            }, 300); // Delay to allow CSS transition
+        }
+
+        // Function to close the prompt builder
+        function closePromptBuilder(event) {
+            if (event && typeof event.stopPropagation === 'function') {
+                event.stopPropagation(); // Prevent event bubbling
+            }
+            promptBuilderOverlay.classList.remove('visible');
+            promptBuilderOverlay.classList.add('hidden');
+            
+            // Return focus to the toggle button after the modal is hidden
+            setTimeout(() => {
+                toggleButton.focus();
+            }, 300); // Delay to allow CSS transition
+        }
+
+        // Toggle prompt builder on button click
+        toggleButton.addEventListener('click', openPromptBuilder);
+
+        // Close prompt builder when clicking the close button
+        closeButton.addEventListener('click', closePromptBuilder);
+
+        // Close prompt builder when clicking outside the prompt modal
+        promptBuilderOverlay.addEventListener('click', (event) => {
+            if (event.target === promptBuilderOverlay) {
+                closePromptBuilder(event);
+            }
+        });
+
+        // Template definitions
+        const templates = {
+            explain: {
+                fields: [
+                    { name: 'concept', label: 'Concept', type: 'text' }
+                ],
+                template: 'Please explain {concept} in simple terms.'
+            },
+            compare: {
+                fields: [
+                    { name: 'item1', label: 'Item 1', type: 'text' },
+                    { name: 'item2', label: 'Item 2', type: 'text' }
+                ],
+                template: 'Compare {item1} and {item2}, highlighting key differences and similarities.'
+            },
+            code: {
+                fields: [
+                    { 
+                        name: 'language', 
+                        label: 'Language', 
+                        type: 'select', 
+                        options: ['JavaScript', 'Python', 'Java', 'C++', 'Ruby', 'Go', 'C#', 'PHP', 'TypeScript'] 
+                    },
+                    { name: 'concept', label: 'Concept', type: 'text' }
+                ],
+                template: 'Explain how to implement {concept} in {language} with examples.'
+            },
+            summarize: {
+                fields: [
+                    { name: 'summary_length', label: 'Summary Length', type: 'select', options: ['Short', 'Medium', 'Long'] },
+                    { name: 'text_to_summarize', label: 'Text to Summarize', type: 'textarea' }
+                ],
+                template: 'Please provide a {summary_length} summary of the following text:\n\n{text_to_summarize}'
+            },
+            generateQuiz: {
+                fields: [
+                    { name: 'content', label: 'Content', type: 'textarea' },
+                    { name: 'number_of_questions', label: 'Number of Questions', type: 'number' },
+                    { name: 'question_type', label: 'Question Type', type: 'select', options: ['Multiple Choice', 'Open-Ended'] }
+                ],
+                template: 'Create {number_of_questions} {question_type} questions based on the following content:\n\n{content}'
+            },
+            translate: {
+                fields: [
+                    { 
+                        name: 'source_language', 
+                        label: 'Source Language', 
+                        type: 'select', 
+                        options: ['English', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', 'Korean', 'Arabic', 'Portuguese', 'Russian'] 
+                    },
+                    { 
+                        name: 'target_language', 
+                        label: 'Target Language', 
+                        type: 'select', 
+                        options: ['English', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', 'Korean', 'Arabic', 'Portuguese', 'Russian'] 
+                    },
+                    { name: 'text_to_translate', label: 'Text to Translate', type: 'textarea' }
+                ],
+                template: 'Translate the following text from {source_language} to {target_language}:\n\n{text_to_translate}'
+            },
+            // Add more templates as needed...
+        };
+
+        // Handle template selection
+        if (promptTemplate) {
+            promptTemplate.addEventListener('change', (e) => {
+                const selected = templates[e.target.value];
+                if (!selected) {
+                    promptFields.innerHTML = '';
+                    return;
+                }
+                
+                promptFields.innerHTML = selected.fields.map(field => {
+                    if (field.type === 'select') {
+                        return `
+                            <div class="prompt-field">
+                                <label for="${field.name}">${field.label}:</label>
+                                <select id="${field.name}" name="${field.name}" required>
+                                    <option value="">Select an option...</option>
+                                    ${field.options.map(option => `<option value="${option}">${option}</option>`).join('')}
+                                </select>
+                                <span class="error-message"></span>
+                            </div>
+                        `;
+                    } else if (field.type === 'textarea') {
+                        return `
+                            <div class="prompt-field">
+                                <label for="${field.name}">${field.label}:</label>
+                                <textarea id="${field.name}" name="${field.name}" rows="4" required></textarea>
+                                <span class="error-message"></span>
+                            </div>
+                        `;
+                    } else {
+                        return `
+                            <div class="prompt-field">
+                                <label for="${field.name}">${field.label}:</label>
+                                <input type="text" id="${field.name}" name="${field.name}" required>
+                                <span class="error-message"></span>
+                            </div>
+                        `;
+                    }
+                }).join('');
+            });
+        }
+
+        // Handle prompt insertion (Updated with validation)
+        if (insertPrompt) {
+            insertPrompt.addEventListener('click', () => {
+                const selected = templates[promptTemplate.value];
+                if (!selected) return;
+
+                let prompt = selected.template;
+                const missingFields = [];
+
+                // Clear previous error messages
+                promptBuilder.querySelectorAll('.error-message').forEach(span => {
+                    span.textContent = '';
+                    span.style.display = 'none';
+                });
+                promptBuilder.querySelectorAll('.input-error').forEach(input => {
+                    input.classList.remove('input-error');
+                });
+
+                selected.fields.forEach(field => {
+                    const input = document.querySelector(`#${field.name}`);
+                    if (input) {
+                        const value = input.value.trim();
+                        if (!value) {
+                            missingFields.push(field.label);
+                            input.classList.add('input-error');
+                            const errorSpan = input.nextElementSibling;
+                            if (errorSpan) {
+                                errorSpan.textContent = `${field.label} is required.`;
+                                errorSpan.style.display = 'block';
+                            }
+                        }
+                        prompt = prompt.replace(`{${field.name}}`, value || `{${field.name}}`);
+                    }
+                });
+
+                if (missingFields.length > 0) {
+                    // Focus on the first missing field
+                    const firstMissingField = selected.fields.find(field => missingFields.includes(field.label));
+                    if (firstMissingField) {
+                        const firstInput = document.querySelector(`#${firstMissingField.name}`);
+                        if (firstInput) firstInput.focus();
+                    }
+                    return; // Exit without inserting the prompt
+                }
+
+                messageInput.value = prompt;
+                closePromptBuilder(); // Close the modal
+                messageInput.focus();
+            });
+        }
+    }
+
+    // Memory management functions
     function cleanupMessageHistory() {
         // Limit chat history to last 100 messages to prevent memory bloat
         const messages = chatMessages.children;
@@ -366,9 +574,27 @@ document.addEventListener('DOMContentLoaded', function() {
         rootMargin: '100px'
     });
 
+    // Observe messages for memory management
+    const observeMessages = () => {
+        Array.from(chatMessages.children).forEach(child => {
+            messageObserver.observe(child);
+        });
+    };
+
+    // Initial observation
+    observeMessages();
+
+    // Observe future messages
+    const mutationObserver = new MutationObserver(() => {
+        observeMessages();
+    });
+
+    mutationObserver.observe(chatMessages, { childList: true });
+
     // Add event listener cleanup on page unload
     window.addEventListener('unload', () => {
         messageObserver.disconnect();
+        mutationObserver.disconnect();
         // Clear any remaining timeouts
         if (window.debounceTimeout) clearTimeout(window.debounceTimeout);
     });
@@ -400,4 +626,9 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
+
+    // Scroll to bottom on new messages
+    chatMessages.addEventListener('scroll', () => {
+        // Any scroll handlers if needed
+    }, { passive: true });
 });
