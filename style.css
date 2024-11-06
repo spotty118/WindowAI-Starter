@@ -9,7 +9,6 @@
 body {
     background: var(--background-gradient);
     min-height: 100vh;
-    margin: 0;
     padding: 20px;
     display: flex;
     align-items: center;
@@ -20,7 +19,6 @@ body {
 .chat-container {
     width: 95%;
     max-width: 1000px;
-    min-width: 320px;
     height: 90vh;
     margin: 0 auto;
     display: flex;
@@ -29,47 +27,6 @@ body {
     border-radius: 16px;
     box-shadow: 0 8px 30px var(--shadow-color);
     overflow: hidden;
-    contain: content;
-    transform: translateZ(0);
-    backface-visibility: hidden;
-    perspective: 1000px;
-}
-
-.chat-header {
-    padding: 10px 20px;
-    background: var(--header-background);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 10px;
-}
-
-.controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-#themeToggle {
-    padding: 6px 12px;
-    background: none;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: all 0.3s ease;
-    color: var(--text-color);
-}
-
-#themeToggle:hover {
-    background: var(--button-hover);
-}
-
-#themeToggle:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
-    border-color: var(--primary-color);
 }
 
 #chatMessages {
@@ -78,6 +35,7 @@ body {
     padding: 20px;
     background: var(--background-color);
     scroll-behavior: smooth;
+    overflow-x: hidden;
     contain: strict;
     content-visibility: auto;
     contain-intrinsic-size: 0 500px;
@@ -102,6 +60,9 @@ body {
     will-change: transform;
     width: fit-content;
     min-width: 60px;
+    animation: fadeIn 0.3s ease-out;
+    content-visibility: auto;
+    contain-intrinsic-size: 0 100px;
 }
 
 .user-message {
@@ -163,8 +124,9 @@ body {
 
 #messageInput:focus {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
     border-color: var(--primary-color);
+    transition: all 0.2s ease;
 }
 
 #messageInput::placeholder {
@@ -173,7 +135,7 @@ body {
 
 #sendButton {
     padding: 12px 24px;
-    background: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color), #0056b3);
     color: white;
     border: none;
     border-radius: 12px;
@@ -185,9 +147,9 @@ body {
 }
 
 #sendButton:hover {
-    background: var(--primary-hover);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(0, 122, 255, 0.2);
+    background: linear-gradient(135deg, #0056b3, var(--primary-color));
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
 }
 
 #sendButton:active {
@@ -243,30 +205,33 @@ body {
     transition: all 0.3s ease;
     background: var(--input-background);
     color: var(--text-color);
+    transition: transform 0.3s ease;
 }
 
 #emojiButton:hover {
     background: #f8f9fa;
-    transform: translateY(-1px);
+    transform: translateY(-1px) rotate(10deg) scale(1.1);
 }
 
 /* Scrollbar styling */
 #chatMessages::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
+    height: 6px;
 }
 
 #chatMessages::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
 }
 
 #chatMessages::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    transition: background 0.2s ease;
 }
 
 #chatMessages::-webkit-scrollbar-thumb:hover {
-    background: #bbb;
+    background: rgba(0, 0, 0, 0.3);
 }
 
 /* Responsive design */
@@ -312,16 +277,36 @@ body {
 
 /* Code block styling */
 pre {
-    background: #f6f8fa;
-    border-radius: 6px;
-    padding: 12px;
-    margin: 8px 0;
-    overflow-x: auto;
+    position: relative;
+    padding: 16px;
+    background: #1e1e1e;
+    border-radius: 8px;
+    overflow: hidden;
 }
 
-code {
-    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-    font-size: 13px;
+pre code {
+    color: #d4d4d4;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.copy-code-button {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+pre:hover .copy-code-button {
+    opacity: 1;
 }
 
 /* Message content */
@@ -363,6 +348,7 @@ code {
     align-items: center;
     justify-content: center;
     gap: 4px;
+    animation: pulse 2s infinite;
 }
 
 .typing-indicator span {
@@ -706,5 +692,179 @@ input:focus, button:focus, select:focus, textarea:focus {
 select:disabled {
     opacity: 0.7;
     cursor: not-allowed;
+}
+
+/* Add to style.css */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.user-message, .ai-message {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.user-message:hover, .ai-message:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.search-bar {
+    position: sticky;
+    top: 0;
+    padding: 10px;
+    background: var(--header-background);
+    z-index: 10;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 14px;
+    background: var(--input-background);
+}
+
+.highlight {
+    background: rgba(255, 255, 0, 0.2);
+    border-radius: 2px;
+}
+
+.message-actions {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.user-message:hover .message-actions,
+.ai-message:hover .message-actions {
+    opacity: 1;
+}
+
+.action-button {
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.1);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    color: inherit;
+    margin-left: 4px;
+}
+
+.input-preview {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--background-color);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+    display: none;
+}
+
+.input-preview.active {
+    display: block;
+}
+
+:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.skip-to-content {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--primary-color);
+    color: white;
+    padding: 8px;
+    z-index: 100;
+    transition: top 0.2s ease;
+}
+
+.skip-to-content:focus {
+    top: 0;
+}
+
+/* Add to existing CSS */
+.wave-emoji {
+    display: inline-block;
+    animation-name: wave-animation;
+    animation-duration: 2.5s;
+    animation-iteration-count: infinite;
+    transform-origin: 70% 70%;
+}
+
+@keyframes wave-animation {
+    0% { transform: rotate(0deg); }
+    10% { transform: rotate(14deg); }
+    20% { transform: rotate(-8deg); }
+    30% { transform: rotate(14deg); }
+    40% { transform: rotate(-4deg); }
+    50% { transform: rotate(10deg); }
+    60% { transform: rotate(0deg); }
+    100% { transform: rotate(0deg); }
+}
+
+/* Optional: Add a fade effect for new messages */
+.user-message, .ai-message {
+    animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.new-messages-indicator {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    background: var(--primary-color);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    pointer-events: auto;
+}
+
+.new-messages-indicator.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+#chatMessages {
+    scroll-behavior: smooth;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch; /* For better iOS scrolling */
 }
 

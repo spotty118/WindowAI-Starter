@@ -64,60 +64,22 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     async function addMessageToChat(message, isUser = true) {
         try {
+            const chatMessages = document.querySelector('#chatMessages');
             const div = document.createElement('div');
             div.className = isUser ? 'user-message' : 'ai-message';
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
+            contentDiv.textContent = message;
             
-            // Add timestamp
-            const timeSpan = document.createElement('span');
-            timeSpan.className = 'timestamp';
-            timeSpan.textContent = new Date().toLocaleTimeString();
-            
-            if (isUser) {
-                contentDiv.textContent = message;
-            } else {
-                const messageStr = typeof message === 'string' ? message : String(message);
-                
-                try {
-                    marked.use({
-                        gfm: true,
-                        breaks: true,
-                        headerIds: true,
-                        mangle: false
-                    });
-                    
-                    contentDiv.innerHTML = marked.parse(messageStr);
-                    
-                    if (window.renderMathInElement) {
-                        renderMathInElement(contentDiv, {
-                            delimiters: [
-                                {left: '$$', right: '$$', display: true},
-                                {left: '$', right: '$', display: false}
-                            ],
-                            throwOnError: false
-                        });
-                    }
-                } catch (parseError) {
-                    console.error('Markdown parsing error:', parseError);
-                    contentDiv.textContent = messageStr;
-                }
-            }
-            
-            // Append content and timestamp in correct order
             div.appendChild(contentDiv);
-            div.appendChild(timeSpan);
-            
             chatMessages.appendChild(div);
-            scrollToBottom();
+            
+            // Always attempt to scroll, with special handling for user messages
+            scrollToBottom(isUser);
             
         } catch (error) {
             console.error('Failed to add message to chat:', error);
-            const errorDiv = document.createElement('div');
-            errorDiv.className = isUser ? 'user-message' : 'ai-message';
-            errorDiv.textContent = typeof message === 'string' ? message : 'Error displaying message';
-            chatMessages.appendChild(errorDiv);
         }
     }
 
@@ -279,7 +241,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Helper function to scroll chat to bottom
-    const scrollToBottom = () => chatMessages.scrollTop = chatMessages.scrollHeight;
+    function scrollToBottom(force = false) {
+        const chatMessages = document.querySelector('#chatMessages');
+        
+        if (!chatMessages) return;
+
+        // Check if user is near the bottom
+        const isNearBottom = 
+            chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+        
+        // Scroll only if near bottom or force is true
+        if (force || isNearBottom) {
+            requestAnimationFrame(() => {
+                chatMessages.scrollTo({
+                    top: chatMessages.scrollHeight,
+                    behavior: 'smooth'
+                });
+            });
+        }
+    }
 
     // Event listeners
     sendButton.addEventListener('click', () => {
@@ -623,4 +603,48 @@ document.addEventListener('DOMContentLoaded', function() {
     chatMessages.addEventListener('scroll', () => {
         // Any scroll handlers if needed
     }, { passive: true });
+
+    // Add this after your DOM content loaded event
+    let userHasScrolled = false;
+
+    chatMessages.addEventListener('scroll', () => {
+        const isAtBottom = 
+            chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+        userHasScrolled = !isAtBottom;
+    }, { passive: true });
+
+    function showNewMessageIndicator() {
+        let indicator = document.querySelector('.new-messages-indicator');
+        
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'new-messages-indicator';
+            indicator.textContent = 'New Messages ↓';
+            indicator.addEventListener('click', () => {
+                scrollToBottom(true);
+                indicator.classList.remove('visible');
+            });
+            document.body.appendChild(indicator);
+        }
+        
+        setTimeout(() => indicator.classList.add('visible'), 100);
+    }
+
+    // Add a MutationObserver to handle auto-scrolling for dynamic content
+    const scrollObserver = new MutationObserver((mutations) => {
+        // Only scroll if mutations add new content
+        const addedNodes = mutations.some(mutation => 
+            mutation.type === 'childList' && mutation.addedNodes.length > 0
+        );
+        
+        if (addedNodes) {
+            scrollToBottom();
+        }
+    });
+
+    // Configure the observer
+    scrollObserver.observe(chatMessages, {
+        childList: true,
+        subtree: true
+    });
 });
