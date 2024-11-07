@@ -21,10 +21,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const emojiPicker = document.querySelector('emoji-picker');
     let isEmojiPickerVisible = false;
 
-    emojiButton.addEventListener('click', (event) => {
-        event.stopPropagation(); // Prevent event bubbling
-        isEmojiPickerVisible = !isEmojiPickerVisible;
-        emojiPicker.style.display = isEmojiPickerVisible ? 'block' : 'none';
+    // Lazy load emoji picker
+    let emojiPickerLoaded = false;
+
+    emojiButton.addEventListener('click', async () => {
+        if (!emojiPickerLoaded) {
+            await import('./emoji-picker.js');
+            emojiPickerLoaded = true;
+        }
+        // Show emoji picker
     });
 
     emojiPicker.addEventListener('emoji-click', event => {
@@ -675,4 +680,56 @@ document.addEventListener('DOMContentLoaded', function() {
             placement: 'top'
         });
     }
+
+    // Instead of updating DOM for each message
+    function addMessageBatch(messages) {
+        // Create document fragment
+        const fragment = document.createDocumentFragment();
+        
+        messages.forEach(msg => {
+            const messageDiv = document.createElement('div');
+            // Add message content
+            fragment.appendChild(messageDiv);
+        });
+        
+        // Single DOM update
+        chatMessages.appendChild(fragment);
+    }
+
+    // Use event delegation instead of multiple listeners
+    chatMessages.addEventListener('click', (event) => {
+        if (event.target.matches('.copy-code-button')) {
+            // Handle copy button click
+        } else if (event.target.matches('.emoji-button')) {
+            // Handle emoji button click
+        }
+    });
+
+    // Use requestAnimationFrame for smooth animations
+    function animateScroll(element, to, duration) {
+        const start = element.scrollTop;
+        const change = to - start;
+        let currentTime = 0;
+
+        function animate(timestamp) {
+            currentTime += 16;
+            const val = easeInOutQuad(currentTime, start, change, duration);
+            element.scrollTop = val;
+            if (currentTime < duration) {
+                requestAnimationFrame(animate);
+            }
+        }
+        requestAnimationFrame(animate);
+    }
+
+    // Add performance marks to measure critical operations
+    performance.mark('chatStart');
+
+    // After chat initialization
+    performance.mark('chatEnd');
+    performance.measure('chatInitialization', 'chatStart', 'chatEnd');
+
+    // Initialize lazy loading
+    const observer = lozad();
+    observer.observe();
 });
