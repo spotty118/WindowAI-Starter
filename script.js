@@ -64,22 +64,60 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     async function addMessageToChat(message, isUser = true) {
         try {
-            const chatMessages = document.querySelector('#chatMessages');
             const div = document.createElement('div');
             div.className = isUser ? 'user-message' : 'ai-message';
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.textContent = message;
             
+            // Add timestamp
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'timestamp';
+            timeSpan.textContent = new Date().toLocaleTimeString();
+            
+            if (isUser) {
+                contentDiv.textContent = message;
+            } else {
+                const messageStr = typeof message === 'string' ? message : String(message);
+                
+                try {
+                    marked.use({
+                        gfm: true,
+                        breaks: true,
+                        headerIds: true,
+                        mangle: false
+                    });
+                    
+                    contentDiv.innerHTML = marked.parse(messageStr);
+                    
+                    if (window.renderMathInElement) {
+                        renderMathInElement(contentDiv, {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false}
+                            ],
+                            throwOnError: false
+                        });
+                    }
+                } catch (parseError) {
+                    console.error('Markdown parsing error:', parseError);
+                    contentDiv.textContent = messageStr;
+                }
+            }
+            
+            // Append content and timestamp in correct order
             div.appendChild(contentDiv);
-            chatMessages.appendChild(div);
+            div.appendChild(timeSpan);
             
-            // Always attempt to scroll, with special handling for user messages
-            scrollToBottom(isUser);
+            chatMessages.appendChild(div);
+            scrollToBottom();
             
         } catch (error) {
             console.error('Failed to add message to chat:', error);
+            const errorDiv = document.createElement('div');
+            errorDiv.className = isUser ? 'user-message' : 'ai-message';
+            errorDiv.textContent = typeof message === 'string' ? message : 'Error displaying message';
+            chatMessages.appendChild(errorDiv);
         }
     }
 
@@ -117,7 +155,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Cache management
     class PromptCache {
-        constructor(maxSize = 50) {
+        constructor(maxSize = 100) {
             this.cache = new Map();
             this.provider = null;
             this.maxSize = maxSize;
@@ -126,23 +164,24 @@ document.addEventListener('DOMContentLoaded', function() {
         setProvider(provider) {
             if (this.provider !== provider) {
                 this.cache.clear();
-                this.provider = provider;
             }
+            this.provider = provider;
         }
 
         async getResponse(message) {
             const cacheKey = JSON.stringify({ provider: this.provider, message });
-            return this.cache.get(cacheKey) || null;
+            if (this.cache.has(cacheKey)) {
+                return this.cache.get(cacheKey);
+            }
+            return null;
         }
 
         setResponse(message, response) {
-            const cacheKey = JSON.stringify({ provider: this.provider, message });
-            
             if (this.cache.size >= this.maxSize) {
-                const oldestKey = this.cache.keys().next().value;
-                this.cache.delete(oldestKey);
+                const firstKey = this.cache.keys().next().value;
+                this.cache.delete(firstKey);
             }
-            
+            const cacheKey = JSON.stringify({ provider: this.provider, message });
             this.cache.set(cacheKey, response);
         }
     }
@@ -240,22 +279,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Helper function to scroll chat to bottom
-    function scrollToBottom(force = false) {
-        const chatMessages = document.querySelector('#chatMessages');
-        if (!chatMessages) return;
-
-        const isNearBottom = 
-            chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
-        
-        if (force || isNearBottom) {
-            requestAnimationFrame(() => {
-                chatMessages.scrollTo({
-                    top: chatMessages.scrollHeight,
-                    behavior: 'smooth'
-                });
-            });
-        }
-    }
+    const scrollToBottom = () => chatMessages.scrollTop = chatMessages.scrollHeight;
 
     // Event listeners
     sendButton.addEventListener('click', () => {
@@ -266,23 +290,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Implement a debounce function for message input
-    function debounce(func, delay) {
-        let timeoutId;
-        return function (...args) {
-            clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => func.apply(this, args), delay);
-        };
-    }
-
-    const debouncedHandleMessage = debounce(handleMessage, 300);
-
     messageInput.addEventListener('keyup', (event) => {
         if (event.key === 'Enter' && !event.shiftKey && messageInput.value.trim()) {
             event.preventDefault();
             const message = messageInput.value.trim();
             messageInput.value = '';
-            debouncedHandleMessage(message);
+            handleMessage(message);
         }
     });
 
@@ -517,7 +530,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Memory management functions
     function cleanupMessageHistory() {
         const messages = chatMessages.children;
-        const maxMessages = 50;
+        const maxMessages = 100;
         
         if (messages.length > maxMessages) {
             const fragment = document.createDocumentFragment();
@@ -532,15 +545,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add message observer to monitor DOM size
     const messageObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            const message = entry.target;
             if (!entry.isIntersecting) {
                 // Temporarily remove content from invisible messages
+                const message = entry.target;
                 if (!message.dataset.originalContent) {
                     message.dataset.originalContent = message.innerHTML;
                     message.innerHTML = '';
                 }
             } else {
                 // Restore content when message becomes visible
+                const message = entry.target;
                 if (message.dataset.originalContent) {
                     message.innerHTML = message.dataset.originalContent;
                     delete message.dataset.originalContent;
@@ -549,8 +563,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, {
         root: chatMessages,
-        rootMargin: '100px',
-        threshold: 0
+        rootMargin: '100px'
     });
 
     // Observe messages for memory management
@@ -610,48 +623,4 @@ document.addEventListener('DOMContentLoaded', function() {
     chatMessages.addEventListener('scroll', () => {
         // Any scroll handlers if needed
     }, { passive: true });
-
-    // Add this after your DOM content loaded event
-    let userHasScrolled = false;
-
-    chatMessages.addEventListener('scroll', () => {
-        const isAtBottom = 
-            chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
-        userHasScrolled = !isAtBottom;
-    }, { passive: true });
-
-    function showNewMessageIndicator() {
-        let indicator = document.querySelector('.new-messages-indicator');
-        
-        if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.className = 'new-messages-indicator';
-            indicator.textContent = 'New Messages ↓';
-            indicator.addEventListener('click', () => {
-                scrollToBottom(true);
-                indicator.classList.remove('visible');
-            });
-            document.body.appendChild(indicator);
-        }
-        
-        setTimeout(() => indicator.classList.add('visible'), 100);
-    }
-
-    // Add a MutationObserver to handle auto-scrolling for dynamic content
-    const scrollObserver = new MutationObserver((mutations) => {
-        // Only scroll if mutations add new content
-        const addedNodes = mutations.some(mutation => 
-            mutation.type === 'childList' && mutation.addedNodes.length > 0
-        );
-        
-        if (addedNodes) {
-            scrollToBottom();
-        }
-    });
-
-    // Configure the observer
-    scrollObserver.observe(chatMessages, {
-        childList: true,
-        subtree: true
-    });
 });
