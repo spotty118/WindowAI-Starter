@@ -1,13 +1,14 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Markdown configuration
-    marked.setOptions({
-        highlight: function(code, lang) {
-            if (lang && hljs.getLanguage(lang)) {
-                return hljs.highlight(code, { language: lang }).value;
+    // Initialize markdown-it with Prism.js highlighting
+    const md = markdownit({
+        highlight: function (str, lang) {
+            if (lang && Prism.languages[lang]) {
+                try {
+                    return Prism.highlight(str, Prism.languages[lang], lang);
+                } catch (__) {}
             }
-            return hljs.highlightAuto(code).value;
-        },
-        breaks: true
+            return '';
+        }
     });
 
     // Core DOM elements
@@ -81,31 +82,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 const messageStr = typeof message === 'string' ? message : String(message);
                 
                 try {
-                    marked.use({
-                        gfm: true,
-                        breaks: true,
-                        headerIds: true,
-                        mangle: false
+                    // Sanitize the markdown content
+                    const sanitizedContent = DOMPurify.sanitize(messageStr);
+                    // Convert markdown to HTML
+                    const htmlContent = md.render(sanitizedContent);
+                    contentDiv.innerHTML = htmlContent;
+
+                    // Initialize copy buttons for code blocks
+                    const codeBlocks = contentDiv.querySelectorAll('pre code');
+                    codeBlocks.forEach((block, index) => {
+                        const button = document.createElement('button');
+                        button.className = 'copy-code-button';
+                        button.innerHTML = 'Copy';
+                        button.setAttribute('data-clipboard-target', `#code-${index}`);
+                        block.id = `code-${index}`;
+                        block.parentNode.insertBefore(button, block);
                     });
-                    
-                    contentDiv.innerHTML = marked.parse(messageStr);
-                    
-                    if (window.renderMathInElement) {
-                        renderMathInElement(contentDiv, {
-                            delimiters: [
-                                {left: '$$', right: '$$', display: true},
-                                {left: '$', right: '$', display: false}
-                            ],
-                            throwOnError: false
-                        });
-                    }
+
+                    // Initialize Clipboard.js for new buttons
+                    initializeClipboard();
+
+                    // Initialize tooltips
+                    tippy('[data-tippy-content]', {
+                        theme: 'light',
+                        placement: 'top'
+                    });
+
                 } catch (parseError) {
-                    console.error('Markdown parsing error:', parseError);
+                    console.error('Parsing error:', parseError);
                     contentDiv.textContent = messageStr;
                 }
             }
             
-            // Append content and timestamp in correct order
             div.appendChild(contentDiv);
             div.appendChild(timeSpan);
             
@@ -623,4 +631,48 @@ document.addEventListener('DOMContentLoaded', function() {
     chatMessages.addEventListener('scroll', () => {
         // Any scroll handlers if needed
     }, { passive: true });
+
+    // Add this after DOMContentLoaded
+    tippy('[data-tippy-content]', {
+        theme: 'light',
+        placement: 'top'
+    });
+
+    // Initialize Clipboard.js
+    function initializeClipboard() {
+        const clipboard = new ClipboardJS('.copy-code-button');
+        clipboard.on('success', (e) => {
+            // Provide user feedback
+            e.trigger.textContent = 'Copied!';
+            setTimeout(() => {
+                e.trigger.textContent = 'Copy';
+            }, 2000);
+        });
+    }
+
+    // Initialize Tippy.js tooltips
+    tippy('[data-tippy-content]', {
+        theme: 'light',
+        placement: 'top'
+    });
+
+    // Initialize Prism.js for syntax highlighting
+    Prism.highlightAll();
+
+    // Initialize Prism.js for syntax highlighting
+    function highlightCodeBlocks() {
+        // Highlight code blocks within new content
+        const codeBlocks = chatMessages.querySelectorAll('pre code');
+        codeBlocks.forEach((block) => {
+            Prism.highlightElement(block);
+        });
+    }
+
+    // Initialize Tippy.js tooltips
+    function initializeTooltips() {
+        tippy('[data-tippy-content]', {
+            theme: 'light',
+            placement: 'top'
+        });
+    }
 });

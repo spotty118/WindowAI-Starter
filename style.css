@@ -871,3 +871,22 @@ select:disabled {
     -webkit-overflow-scrolling: touch; /* For better iOS scrolling */
 }
 
+/* Add Tippy.js custom styles */
+.tippy-box[data-theme~='light'] {
+    background-color: white;
+    color: #333;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Prism.js theme overrides */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+    color: #666;
+}
+
+.token.function {
+    color: #005cc5;
+}
+
