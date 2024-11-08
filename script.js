@@ -1,35 +1,26 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize markdown-it with Prism.js highlighting
-    const md = markdownit({
-        highlight: function (str, lang) {
-            if (lang && Prism.languages[lang]) {
-                try {
-                    return Prism.highlight(str, Prism.languages[lang], lang);
-                } catch (__) {}
+    // Markdown configuration
+    marked.setOptions({
+        highlight: function(code, lang) {
+            if (lang && hljs.getLanguage(lang)) {
+                return hljs.highlight(code, { language: lang }).value;
             }
-            return '';
-        }
+            return hljs.highlightAuto(code).value;
+        },
+        breaks: true
     });
 
     // Core DOM elements
     const messageInput = document.querySelector('#messageInput');
     const sendButton = document.querySelector('#sendButton');
     const chatMessages = document.querySelector('#chatMessages');
-
-    // Emoji picker functionality
     const emojiButton = document.querySelector('#emojiButton');
     const emojiPicker = document.querySelector('emoji-picker');
     let isEmojiPickerVisible = false;
 
-    // Lazy load emoji picker
-    let emojiPickerLoaded = false;
-
-    emojiButton.addEventListener('click', async () => {
-        if (!emojiPickerLoaded) {
-            await import('./emoji-picker.js');
-            emojiPickerLoaded = true;
-        }
-        // Show emoji picker
+    emojiButton.addEventListener('click', () => {
+        isEmojiPickerVisible = !isEmojiPickerVisible;
+        emojiPicker.style.display = isEmojiPickerVisible ? 'block' : 'none';
     });
 
     emojiPicker.addEventListener('emoji-click', event => {
@@ -41,26 +32,18 @@ document.addEventListener('DOMContentLoaded', function() {
         messageInput.value = textBeforeCursor + emoji + textAfterCursor;
         messageInput.focus();
         
-        // Set cursor position after emoji
         const newCursorPosition = cursorPosition + emoji.length;
         messageInput.setSelectionRange(newCursorPosition, newCursorPosition);
         
-        // Hide emoji picker after selection
         isEmojiPickerVisible = false;
         emojiPicker.style.display = 'none';
     });
 
-    // Close emoji picker when clicking outside
     document.addEventListener('click', (event) => {
         if (!emojiPicker.contains(event.target) && !emojiButton.contains(event.target)) {
             isEmojiPickerVisible = false;
             emojiPicker.style.display = 'none';
         }
-    });
-
-    emojiPicker.addEventListener('error', (e) => {
-        console.warn('Emoji picker failed to load:', e);
-        emojiButton.style.display = 'none'; // Hide emoji button if picker fails
     });
 
     /**
@@ -87,34 +70,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 const messageStr = typeof message === 'string' ? message : String(message);
                 
                 try {
-                    // Sanitize the markdown content
-                    const sanitizedContent = DOMPurify.sanitize(messageStr);
-                    // Convert markdown to HTML
-                    const htmlContent = md.render(sanitizedContent);
-                    contentDiv.innerHTML = htmlContent;
-
-                    // Initialize copy buttons for code blocks
-                    const codeBlocks = contentDiv.querySelectorAll('pre code');
-                    codeBlocks.forEach((block, index) => {
-                        const button = document.createElement('button');
-                        button.className = 'copy-code-button';
-                        button.innerHTML = 'Copy';
-                        button.setAttribute('data-clipboard-target', `#code-${index}`);
-                        block.id = `code-${index}`;
-                        block.parentNode.insertBefore(button, block);
+                    marked.use({
+                        gfm: true,
+                        breaks: true,
+                        headerIds: true,
+                        mangle: false
                     });
-
-                    // Initialize Clipboard.js for new buttons
-                    initializeClipboard();
-
-                    // Initialize tooltips
-                    tippy('[data-tippy-content]', {
-                        theme: 'light',
-                        placement: 'top'
-                    });
-
+                    
+                    contentDiv.innerHTML = marked.parse(messageStr);
+                    
+                    if (window.renderMathInElement) {
+                        renderMathInElement(contentDiv, {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false}
+                            ],
+                            throwOnError: false
+                        });
+                    }
                 } catch (parseError) {
-                    console.error('Parsing error:', parseError);
+                    console.error('Markdown parsing error:', parseError);
                     contentDiv.textContent = messageStr;
                 }
             }
@@ -164,43 +139,81 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Global state management
     let isGenerating = false;
-    let currentProvider = null;
 
     // Cache management
-    class PromptCache {
+    class SmartCache {
         constructor(maxSize = 100) {
             this.cache = new Map();
-            this.provider = null;
             this.maxSize = maxSize;
         }
 
-        setProvider(provider) {
-            if (this.provider !== provider) {
-                this.cache.clear();
-            }
-            this.provider = provider;
-        }
+        // Get exact or similar response considering context
+        getResponse(message, previousMessages = []) {
+            const normalizedMessage = message.toLowerCase().trim();
+            const context = this.getRecentContext(previousMessages);
 
-        async getResponse(message) {
-            const cacheKey = JSON.stringify({ provider: this.provider, message });
-            if (this.cache.has(cacheKey)) {
-                return this.cache.get(cacheKey);
+            // Try exact match with context
+            for (const [key, entry] of this.cache.entries()) {
+                const cacheData = JSON.parse(key);
+                if (cacheData.message.toLowerCase() === normalizedMessage &&
+                    this.contextMatches(context, cacheData.context)) {
+                    console.log('Exact cache hit with matching context!');
+                    entry.hitCount++;
+                    entry.lastAccessed = Date.now();
+                    return entry.response;
+                }
             }
+
             return null;
         }
 
-        setResponse(message, response) {
-            if (this.cache.size >= this.maxSize) {
-                const firstKey = this.cache.keys().next().value;
-                this.cache.delete(firstKey);
+        getRecentContext(previousMessages) {
+            // Get last 2 messages for context
+            return previousMessages.slice(-2).map(msg => msg.toLowerCase().trim());
+        }
+
+        contextMatches(currentContext, cachedContext) {
+            if (!currentContext.length && !cachedContext.length) return true;
+            if (!currentContext.length || !cachedContext.length) return false;
+            
+            // Compare contexts
+            return JSON.stringify(currentContext) === JSON.stringify(cachedContext);
+        }
+
+        setResponse(message, response, previousMessages = []) {
+            const context = this.getRecentContext(previousMessages);
+            const cacheKey = JSON.stringify({
+                message: message.trim(),
+                context: context
+            });
+
+            const entry = {
+                response,
+                timestamp: Date.now(),
+                lastAccessed: Date.now(),
+                hitCount: 1
+            };
+
+            this.cache.set(cacheKey, entry);
+            
+            if (this.cache.size > this.maxSize) {
+                this.cleanup();
             }
-            const cacheKey = JSON.stringify({ provider: this.provider, message });
-            this.cache.set(cacheKey, response);
+        }
+
+        cleanup() {
+            const entries = Array.from(this.cache.entries())
+                .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+            
+            while (this.cache.size > this.maxSize) {
+                const [key] = entries.shift();
+                this.cache.delete(key);
+            }
         }
     }
 
     // Initialize cache
-    const promptCache = new PromptCache();
+    const smartCache = new SmartCache();
 
     // Message handling with proper state management
     async function handleMessage(userMessage) {
@@ -215,10 +228,9 @@ document.addEventListener('DOMContentLoaded', function() {
             typingIndicator.className = 'typing-indicator';
             typingIndicator.innerHTML = '<span></span><span></span><span></span>';
             chatMessages.appendChild(typingIndicator);
-            scrollToBottom();
             
             // Check cache first
-            const cachedResponse = await promptCache.getResponse(userMessage);
+            const cachedResponse = smartCache.getResponse(userMessage);
             if (cachedResponse) {
                 addMessageToChat(cachedResponse, false);
                 return;
@@ -227,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Generate new response
             const response = await getAIResponse(userMessage);
             if (response) {
-                promptCache.setResponse(userMessage, response);
+                smartCache.setResponse(userMessage, response);
                 addMessageToChat(response, false);
             }
 
@@ -244,8 +256,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // AI response generation with provider detection
-    async function getAIResponse(message) {
+    async function getAIResponse(message, chatHistory = []) {
         try {
+            // Check cache with context
+            const previousMessages = chatHistory.map(msg => msg.content);
+            const cachedResponse = smartCache.getResponse(message, previousMessages);
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+
+            // If not in cache, generate new response
             if (!window.ai) {
                 throw new Error('Window AI not available');
             }
@@ -257,7 +277,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }]
             });
 
-            return processResponse(response);
+            const processedResponse = processResponse(response);
+            
+            // Cache the new response with context
+            smartCache.setResponse(message, processedResponse, previousMessages);
+
+            return processedResponse;
 
         } catch (error) {
             console.error('Generation error:', error);
@@ -304,8 +329,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     messageInput.addEventListener('keyup', (event) => {
-        if (event.key === 'Enter' && !event.shiftKey && messageInput.value.trim()) {
-            event.preventDefault();
+        if (event.key === 'Enter' && messageInput.value.trim()) {
             const message = messageInput.value.trim();
             messageInput.value = '';
             handleMessage(message);
@@ -335,401 +359,78 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Prompt builder functionality
-    const promptBuilderOverlay = document.querySelector('.prompt-builder-overlay');
-    const promptBuilder = document.querySelector('.prompt-builder');
-    const toggleButton = document.querySelector('#togglePromptBuilder');
-    const closeButton = document.querySelector('.close-prompt');
-    const promptTemplate = document.querySelector('#promptTemplate');
-    const promptFields = document.querySelector('#promptFields');
-    const insertPrompt = document.querySelector('#insertPrompt');
+    // Prompt tool functionality
+    const promptButton = document.querySelector('#promptButton');
+    const promptTool = document.querySelector('#promptTool');
+    const closePrompt = document.querySelector('.close-prompt');
+    let isPromptToolVisible = false;
 
-    // Debug logging
-    console.log('Elements found:', {
-        promptBuilderOverlay: !!promptBuilderOverlay,
-        promptBuilder: !!promptBuilder,
-        toggleButton: !!toggleButton,
-        closeButton: !!closeButton,
-        promptTemplate: !!promptTemplate,
-        promptFields: !!promptFields,
-        insertPrompt: !!insertPrompt
-    });
-
-    if (!promptBuilderOverlay || !promptBuilder || !toggleButton) {
-        console.error('Prompt builder overlay, prompt builder, or toggle button not found');
-    } else {
-        // Function to open the prompt builder
-        function openPromptBuilder(event) {
-            event.stopPropagation(); // Prevent event bubbling
-            promptBuilderOverlay.classList.remove('hidden');
-            promptBuilderOverlay.classList.add('visible');
-            
-            // Move focus to the first input field after the modal is visible
-            setTimeout(() => {
-                const firstInput = promptBuilder.querySelector('input, select, textarea');
-                if (firstInput) firstInput.focus();
-            }, 300); // Delay to allow CSS transition
+    const promptTemplates = [
+        {
+            title: "Code Review",
+            text: "Please review this code and suggest improvements: \n```\n[paste code here]\n```"
+        },
+        {
+            title: "Debug Help",
+            text: "I'm getting this error: [error message]. Here's my code: \n```\n[paste code here]\n```"
+        },
+        {
+            title: "Explain Code",
+            text: "Can you explain how this code works? \n```\n[paste code here]\n```"
+        },
+        {
+            title: "Optimize Code",
+            text: "How can I optimize this code for better performance? \n```\n[paste code here]\n```"
         }
+    ];
 
-        // Function to close the prompt builder
-        function closePromptBuilder(event) {
-            if (event?.stopPropagation) {
-                event.stopPropagation();
-            }
-            promptBuilderOverlay.classList.remove('visible');
-            promptBuilderOverlay.classList.add('hidden');
-            
-            // Ensure focus is returned after animation
-            requestAnimationFrame(() => {
-                toggleButton.focus();
+    function initializePromptTool() {
+        const templatesContainer = document.querySelector('.prompt-templates');
+        promptTemplates.forEach(template => {
+            const div = document.createElement('div');
+            div.className = 'prompt-template';
+            div.textContent = template.title;
+            div.addEventListener('click', () => {
+                messageInput.value = template.text;
+                messageInput.focus();
+                togglePromptTool();
             });
-        }
-
-        // Toggle prompt builder on button click
-        toggleButton.addEventListener('click', openPromptBuilder);
-
-        // Close prompt builder when clicking the close button
-        closeButton.addEventListener('click', closePromptBuilder);
-
-        // Close prompt builder when clicking outside the prompt modal
-        promptBuilderOverlay.addEventListener('click', (event) => {
-            if (event.target === promptBuilderOverlay) {
-                closePromptBuilder(event);
-            }
-        });
-
-        // Template definitions
-        const templates = {
-            explain: {
-                fields: [
-                    { name: 'concept', label: 'Concept', type: 'text' }
-                ],
-                template: 'Please explain {concept} in simple terms.'
-            },
-            compare: {
-                fields: [
-                    { name: 'item1', label: 'Item 1', type: 'text' },
-                    { name: 'item2', label: 'Item 2', type: 'text' }
-                ],
-                template: 'Compare {item1} and {item2}, highlighting key differences and similarities.'
-            },
-            code: {
-                fields: [
-                    { 
-                        name: 'language', 
-                        label: 'Language', 
-                        type: 'select', 
-                        options: ['JavaScript', 'Python', 'Java', 'C++', 'Ruby', 'Go', 'C#', 'PHP', 'TypeScript'] 
-                    },
-                    { name: 'concept', label: 'Concept', type: 'text' }
-                ],
-                template: 'Explain how to implement {concept} in {language} with examples.'
-            },
-            summarize: {
-                fields: [
-                    { name: 'summary_length', label: 'Summary Length', type: 'select', options: ['Short', 'Medium', 'Long'] },
-                    { name: 'text_to_summarize', label: 'Text to Summarize', type: 'textarea' }
-                ],
-                template: 'Please provide a {summary_length} summary of the following text:\n\n{text_to_summarize}'
-            },
-            generateQuiz: {
-                fields: [
-                    { name: 'content', label: 'Content', type: 'textarea' },
-                    { name: 'number_of_questions', label: 'Number of Questions', type: 'number' },
-                    { name: 'question_type', label: 'Question Type', type: 'select', options: ['Multiple Choice', 'Open-Ended'] }
-                ],
-                template: 'Create {number_of_questions} {question_type} questions based on the following content:\n\n{content}'
-            },
-            translate: {
-                fields: [
-                    { 
-                        name: 'source_language', 
-                        label: 'Source Language', 
-                        type: 'select', 
-                        options: ['English', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', 'Korean', 'Arabic', 'Portuguese', 'Russian'] 
-                    },
-                    { 
-                        name: 'target_language', 
-                        label: 'Target Language', 
-                        type: 'select', 
-                        options: ['English', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', 'Korean', 'Arabic', 'Portuguese', 'Russian'] 
-                    },
-                    { name: 'text_to_translate', label: 'Text to Translate', type: 'textarea' }
-                ],
-                template: 'Translate the following text from {source_language} to {target_language}:\n\n{text_to_translate}'
-            },
-            // Add more templates as needed...
-        };
-
-        // Handle template selection
-        promptTemplate.addEventListener('change', (e) => {
-            try {
-                const selected = templates[e.target.value];
-                if (!selected) {
-                    promptFields.innerHTML = '';
-                    return;
-                }
-                
-                promptFields.innerHTML = selected.fields.map(field => {
-                    if (field.type === 'select') {
-                        return `
-                            <div class="prompt-field">
-                                <label for="${field.name}">${field.label}:</label>
-                                <select id="${field.name}" name="${field.name}" required>
-                                    <option value="">Select an option...</option>
-                                    ${field.options.map(option => `<option value="${option}">${option}</option>`).join('')}
-                                </select>
-                                <span class="error-message"></span>
-                            </div>
-                        `;
-                    } else if (field.type === 'textarea') {
-                        return `
-                            <div class="prompt-field">
-                                <label for="${field.name}">${field.label}:</label>
-                                <textarea id="${field.name}" name="${field.name}" rows="4" required></textarea>
-                                <span class="error-message"></span>
-                            </div>
-                        `;
-                    } else {
-                        return `
-                            <div class="prompt-field">
-                                <label for="${field.name}">${field.label}:</label>
-                                <input type="text" id="${field.name}" name="${field.name}" required>
-                                <span class="error-message"></span>
-                            </div>
-                        `;
-                    }
-                }).join('');
-            } catch (error) {
-                console.error('Error handling template selection:', error);
-                promptFields.innerHTML = '';
-            }
-        });
-
-        // Handle prompt insertion with validation
-        if (insertPrompt) {
-            insertPrompt.addEventListener('click', () => {
-                try {
-                    const selected = templates[promptTemplate.value];
-                    if (!selected) return;
-
-                    let prompt = selected.template;
-
-                    // Clear previous errors
-                    clearValidationErrors();
-
-                    // Validate and collect field values
-                    const fieldValues = validateFields(selected.fields);
-
-                    if (fieldValues.missingFields.length > 0) {
-                        handleMissingFields(fieldValues.missingFields);
-                        return;
-                    }
-
-                    // Build prompt with validated values
-                    prompt = buildPromptString(prompt, fieldValues.values);
-
-                    messageInput.value = prompt;
-                    closePromptBuilder();
-                    messageInput.focus();
-                } catch (error) {
-                    console.error('Error in prompt builder:', error);
-                    showErrorMessage('Failed to build prompt. Please try again.');
-                }
-            });
-        }
-    }
-
-    // Memory management functions
-    function cleanupMessageHistory() {
-        const messages = chatMessages.children;
-        const maxMessages = 100;
-        
-        if (messages.length > maxMessages) {
-            const fragment = document.createDocumentFragment();
-            Array.from(messages)
-                .slice(-maxMessages)
-                .forEach(msg => fragment.appendChild(msg));
-            chatMessages.innerHTML = '';
-            chatMessages.appendChild(fragment);
-        }
-    }
-
-    // Add message observer to monitor DOM size
-    const messageObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (!entry.isIntersecting) {
-                // Temporarily remove content from invisible messages
-                const message = entry.target;
-                if (!message.dataset.originalContent) {
-                    message.dataset.originalContent = message.innerHTML;
-                    message.innerHTML = '';
-                }
-            } else {
-                // Restore content when message becomes visible
-                const message = entry.target;
-                if (message.dataset.originalContent) {
-                    message.innerHTML = message.dataset.originalContent;
-                    delete message.dataset.originalContent;
-                }
-            }
-        });
-    }, {
-        root: chatMessages,
-        rootMargin: '100px'
-    });
-
-    // Observe messages for memory management
-    const observeMessages = () => {
-        Array.from(chatMessages.children).forEach(child => {
-            messageObserver.observe(child);
-        });
-    };
-
-    // Initial observation
-    observeMessages();
-
-    // Observe future messages
-    const mutationObserver = new MutationObserver(() => {
-        observeMessages();
-    });
-
-    mutationObserver.observe(chatMessages, { childList: true });
-
-    // Add event listener cleanup on page unload
-    window.addEventListener('unload', () => {
-        messageObserver.disconnect();
-        mutationObserver.disconnect();
-        // Clear any remaining timeouts
-        if (window.debounceTimeout) clearTimeout(window.debounceTimeout);
-    });
-
-    // Optimize image handling in messages
-    function optimizeImages() {
-        const images = chatMessages.getElementsByTagName('img');
-        Array.from(images).forEach(img => {
-            img.loading = 'lazy';
-            img.decoding = 'async';
+            templatesContainer.appendChild(div);
         });
     }
 
-    // Add periodic cleanup
+    function togglePromptTool() {
+        isPromptToolVisible = !isPromptToolVisible;
+        promptTool.classList.toggle('hidden', !isPromptToolVisible);
+    }
+
+    promptButton.addEventListener('click', togglePromptTool);
+    closePrompt.addEventListener('click', togglePromptTool);
+
+    // Close prompt tool when clicking outside
+    document.addEventListener('click', (event) => {
+        if (!promptTool.contains(event.target) && !promptButton.contains(event.target)) {
+            isPromptToolVisible = false;
+            promptTool.classList.add('hidden');
+        }
+    });
+
+    // Initialize prompt tool
+    initializePromptTool();
+
+    // Optional: Periodically clean old cache entries
     setInterval(() => {
-        if (document.hidden) {
-            cleanupMessageHistory();
-            // Force garbage collection of detached DOM elements if supported
-            if (window.gc) window.gc();
-        }
-    }, 60000); // Run every minute when tab is hidden
+        smartCache.clearOldEntries();
+    }, 60 * 60 * 1000); // Clean every hour
 
-    // Add monitoring for cache usage
-    function checkCacheUsage(response) {
-        if (response.usage) {
-            console.log('Cache metrics:', {
-                cache_creation_input_tokens: response.usage.cache_creation_input_tokens,
-                cache_read_input_tokens: response.usage.cache_read_input_tokens
-            });
-        }
+    // Add this wherever you want to monitor cache performance
+    function logCacheStats() {
+        const stats = smartCache.getStats();
+        console.log('Cache Stats:', stats);
+        console.log('Cache Size:', stats.size);
+        console.log('Total Tokens:', stats.tokenCount);
     }
 
-    // Scroll to bottom on new messages
-    chatMessages.addEventListener('scroll', () => {
-        // Any scroll handlers if needed
-    }, { passive: true });
-
-    // Add this after DOMContentLoaded
-    tippy('[data-tippy-content]', {
-        theme: 'light',
-        placement: 'top'
-    });
-
-    // Initialize Clipboard.js
-    function initializeClipboard() {
-        const clipboard = new ClipboardJS('.copy-code-button');
-        clipboard.on('success', (e) => {
-            // Provide user feedback
-            e.trigger.textContent = 'Copied!';
-            setTimeout(() => {
-                e.trigger.textContent = 'Copy';
-            }, 2000);
-        });
-    }
-
-    // Initialize Tippy.js tooltips
-    tippy('[data-tippy-content]', {
-        theme: 'light',
-        placement: 'top'
-    });
-
-    // Initialize Prism.js for syntax highlighting
-    Prism.highlightAll();
-
-    // Initialize Prism.js for syntax highlighting
-    function highlightCodeBlocks() {
-        // Highlight code blocks within new content
-        const codeBlocks = chatMessages.querySelectorAll('pre code');
-        codeBlocks.forEach((block) => {
-            Prism.highlightElement(block);
-        });
-    }
-
-    // Initialize Tippy.js tooltips
-    function initializeTooltips() {
-        tippy('[data-tippy-content]', {
-            theme: 'light',
-            placement: 'top'
-        });
-    }
-
-    // Instead of updating DOM for each message
-    function addMessageBatch(messages) {
-        // Create document fragment
-        const fragment = document.createDocumentFragment();
-        
-        messages.forEach(msg => {
-            const messageDiv = document.createElement('div');
-            // Add message content
-            fragment.appendChild(messageDiv);
-        });
-        
-        // Single DOM update
-        chatMessages.appendChild(fragment);
-    }
-
-    // Use event delegation instead of multiple listeners
-    chatMessages.addEventListener('click', (event) => {
-        if (event.target.matches('.copy-code-button')) {
-            // Handle copy button click
-        } else if (event.target.matches('.emoji-button')) {
-            // Handle emoji button click
-        }
-    });
-
-    // Use requestAnimationFrame for smooth animations
-    function animateScroll(element, to, duration) {
-        const start = element.scrollTop;
-        const change = to - start;
-        let currentTime = 0;
-
-        function animate(timestamp) {
-            currentTime += 16;
-            const val = easeInOutQuad(currentTime, start, change, duration);
-            element.scrollTop = val;
-            if (currentTime < duration) {
-                requestAnimationFrame(animate);
-            }
-        }
-        requestAnimationFrame(animate);
-    }
-
-    // Add performance marks to measure critical operations
-    performance.mark('chatStart');
-
-    // After chat initialization
-    performance.mark('chatEnd');
-    performance.measure('chatInitialization', 'chatStart', 'chatEnd');
-
-    // Initialize lazy loading
-    const observer = lozad();
-    observer.observe();
+    // Example usage:
+    setInterval(logCacheStats, 5 * 60 * 1000); // Log every 5 minutes
 });

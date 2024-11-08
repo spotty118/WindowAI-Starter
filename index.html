@@ -1,140 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Meta tags and title -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI Chat Interface">
+    <meta name="theme-color" content="#007AFF">
+    
     <title>AI Chat</title>
-
-    <!-- Preconnects and fonts -->
+    
+    <!-- Preload critical assets -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Font and stylesheets -->
+    
+    <!-- Stylesheets -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <!-- Highlight.js and KaTeX stylesheets -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
-    <!-- Your custom stylesheet -->
     <link rel="stylesheet" href="style.css">
-
-    <!-- Memory management meta tags -->
+    
+    <!-- Memory management -->
     <meta http-equiv="Cache-Control" content="no-store">
     <meta name="memory-management" content="aggressive">
-
+    
     <!-- Preload critical resources -->
     <link rel="preload" as="style" href="style.css">
     <link rel="preload" as="script" href="script.js">
-
-    <!-- Markdown-it for better markdown parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/13.0.1/markdown-it.min.js"></script>
-
-    <!-- Prism.js for better code highlighting -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
-    <!-- Include specific languages -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
-
-    <!-- DOMPurify for sanitizing HTML -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.5/purify.min.js"></script>
-
-    <!-- Tippy.js for better tooltips -->
-    <script src="https://unpkg.com/@popperjs/core@2"></script>
-    <script src="https://unpkg.com/tippy.js@6"></script>
-    <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/themes/light.css"/>
-
-    <!-- Clipboard.js for copy functionality -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.11/clipboard.min.js"></script>
-
-    <!-- Add cache control headers -->
-    <meta http-equiv="Cache-Control" content="public, max-age=31536000">
-
-    <!-- Add lazy loading for images -->
-    <script src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script>
-
-    <!-- Add compression -->
-    <script src="https://cdn.jsdelivr.net/npm/compression/dist/compression.min.js"></script>
-
-    <!-- Optimize CSS loading -->
-    <link rel="preload" href="style.css" as="style">
-    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <main class="chat-container">
-        <header class="chat-header">
-            <div class="controls">
-                <!-- Theme Toggle Button -->
-            </div>
-        </header>
-        <div id="chatMessages" 
-             role="log" 
-             aria-live="polite"
-             data-memory-cleanup="true">
+        <div id="chatMessages" role="log" aria-live="polite" data-memory-cleanup="true">
             <!-- Messages will be added here -->
         </div>
         <div class="input-area">
-            <button id="emojiButton" 
-                    aria-label="Open emoji picker" 
-                    title="Emoji Picker"
-                    aria-expanded="false">
-                <span class="wave-emoji">👋</span>
-            </button>
-            <emoji-picker class="emoji-picker" 
-                          aria-hidden="true"
-                          role="dialog"
-                          aria-label="Emoji picker">
-            </emoji-picker>
-            <button id="togglePromptBuilder" 
-                    class="prompt-builder-toggle" 
-                    aria-label="Open prompt builder" 
-                    data-tooltip="Prompts">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 5v14M5 12h14"/>
-                </svg>
-            </button>
-            <input type="text" 
-                   id="messageInput" 
-                   placeholder="Type your message..." 
-                   autocomplete="off"
-                   aria-label="Message input"
-                   data-placeholder="message_input_placeholder"
-                   autofocus>
-            <button id="sendButton" aria-label="Send message" data-i18n="send">Send</button>
-            <button class="clear-chat" aria-label="Clear chat history" data-i18n="clear_chat">Clear Chat</button>
+            <button id="emojiButton" aria-label="Open emoji picker">😊</button>
+            <emoji-picker class="emoji-picker" aria-hidden="true"></emoji-picker>
+            <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" aria-label="Message input" autofocus>
+            <button id="sendButton" aria-label="Send message">Send</button>
+            <button class="clear-chat" aria-label="Clear chat history">Clear Chat</button>
+            <button id="promptButton" aria-label="Open prompt tool">📝</button>
+            <div id="promptTool" class="prompt-tool hidden">
+                <div class="prompt-header">
+                    <h3>Prompt Tool</h3>
+                    <button class="close-prompt">×</button>
+                </div>
+                <div class="prompt-templates">
+                    <!-- Templates will be added here -->
+                </div>
+            </div>
         </div>
     </main>
-
-    <!-- Prompt Builder Modal -->
-    <div class="prompt-builder-overlay hidden">
-        <div class="prompt-builder">
-            <div class="prompt-header">
-                <h3 data-i18n="prompt_builder_title">Prompt Builder</h3>
-                <button class="close-prompt" aria-label="Close prompt builder">×</button>
-            </div>
-            <div class="prompt-content">
-                <select id="promptTemplate" aria-label="Select prompt template">
-                    <option value="" data-i18n="select_template">Select a template...</option>
-                    <option value="explain" data-i18n="explain_concept">Explain Concept</option>
-                    <option value="compare" data-i18n="compare_items">Compare Items</option>
-                    <option value="code" data-i18n="code_explanation">Code Explanation</option>
-                    <option value="summarize" data-i18n="summarize_text">Summarize Text</option>
-                    <option value="generateQuiz" data-i18n="generate_quiz">Generate Quiz Questions</option>
-                    <option value="translate" data-i18n="translate_text">Translate Text</option>
-                    <!-- Add more templates as needed -->
-                </select>
-                <div id="promptFields"></div>
-                <button id="insertPrompt" class="insert-prompt" data-i18n="insert_prompt">Insert Prompt</button>
-            </div>
-        </div>
-    </div>
-
+    
     <!-- Load scripts in optimal order -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" defer></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
-    <!-- Your custom script -->
     <script src="script.js" defer></script>
 </body>
 </html>
