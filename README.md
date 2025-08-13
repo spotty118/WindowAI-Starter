@@ -208,3 +208,16 @@ Notes:
 - Click "Copy Cookie header" to copy and paste into CHATHUB_AUTH_COOKIE in proxy-server/.env.
 - You can also "Export cookies JSON" for debugging.
 - Note: Some environments may restrict access to certain cookies. If nothing shows, fall back to Chrome DevTools → Application → Cookies workflow above.
+### Extracting auth via DevTools (alternative)
+
+If the popup’s cookie view is empty or you prefer DevTools:
+1) Open DevTools on https://app.chathub.gg → Application → Cookies → https://app.chathub.gg
+2) Copy relevant session cookies and build a Cookie header like:
+   Cookie: name1=value1; name2=value2
+3) Or, in Network tab, select a chat request → Headers → Request Headers and copy Authorization if present.
+4) Paste into proxy-server/.env as CHATHUB_AUTH_COOKIE or CHATHUB_AUTH_HEADER respectively.
+
+### Finding the chat API path
+
+In DevTools → Network, send a message in ChatHub, then locate the request that carries your prompt.
+Copy its path (e.g., /api/chat or similar) and set CHATHUB_API_PATH accordingly in proxy-server/.env.
