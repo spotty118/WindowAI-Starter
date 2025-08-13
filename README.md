@@ -109,3 +109,96 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Window AI Extension team
 - All contributors to this project
+## Chrome Extension: ChatHub Interceptor
+
+This repository now includes a simple Chrome Extension to intercept requests on app.chathub.gg for debugging.
+
+Location:
+- extension/manifest.json
+- extension/background.js
+- extension/content.js
+- extension/inject.js
+- extension/popup.html
+- extension/popup.js
+- extension/popup.css
+
+How to load the extension:
+1. Open Chrome and navigate to chrome://extensions/
+2. Enable Developer mode (top-right toggle)
+3. Click “Load unpacked” and select the extension/ folder in this repo
+4. Ensure the extension is enabled
+
+Usage:
+- Navigate to https://app.chathub.gg/
+- Complete login
+- Click the extension icon to open the popup
+- Use “Capture enabled” to toggle interception
+- Use “Clear” to clear logs and “Export” to download JSON logs
+
+What it captures:
+- fetch and XHR requests and responses (URL, method/status, headers, body up to 64KB)
+- WebSocket frames (text up to 64KB) and state changes
+- Server-Sent Events (SSE) messages
+All capture is scoped to https://app.chathub.gg/* and stored locally via chrome.storage.
+
+Notes:
+- This is logging-only and does not modify requests or the page.
+- Bodies longer than 64KB are truncated for performance.
+- The extension requires host permissions for https://app.chathub.gg/*
+## OpenAI-Compatible Proxy Server
+
+A minimal proxy is included to expose an OpenAI-compatible API backed by your authenticated ChatHub session.
+
+Location:
+- proxy-server/
+
+Setup:
+1. cd proxy-server
+2. npm install
+3. cp .env.example .env
+4. Fill .env with your ChatHub auth and endpoint info:
+   - CHATHUB_BASE_URL=https://app.chathub.gg
+   - CHATHUB_API_PATH=/api/chat
+   - CHATHUB_AUTH_COOKIE= Paste the Cookie header string for your ChatHub session
+   - Or set CHATHUB_AUTH_HEADER=Authorization: Bearer YOUR_TOKEN if ChatHub uses an auth header
+   - Optionally set CHATHUB_EXTRA_HEADERS to a JSON object for any additional headers required
+5. npm start
+
+Endpoints:
+- POST /v1/chat/completions
+  - Accepts standard OpenAI chat body: {"model":"gpt-3.5-turbo","messages":[{"role":"user","content":"Hello"}]}
+  - Returns OpenAI-compatible JSON with choices[0].message.content
+  - stream=true is not yet supported (non-streaming only)
+
+How to retrieve auth:
+- Load the Chrome extension in this repo and log in to https://app.chathub.gg
+- In the popup, export logs and search for requests that include Authorization or Cookie headers
+- Copy the Cookie header value into CHATHUB_AUTH_COOKIE, or an auth header into CHATHUB_AUTH_HEADER
+
+Quick test:
+curl -s http://localhost:3001/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-3.5-turbo","messages":[{"role":"user","content":"Hello from proxy"}]}'
+
+Integration:
+- Set your OpenAI-compatible client (e.g., Cline, Roo, etc.) to use http://localhost:3001 as the base URL.
+- Use any model name; the proxy forwards model and messages to ChatHub.
+
+Notes:
+- Do not commit real cookies or tokens.
+- The mapping to ChatHub is generic and may need tuned CHATHUB_API_PATH and headers based on the captured requests.
+- If ChatHub uses streaming via SSE or WebSockets, add streaming support later as needed.
+### Notes on Cookies and Headers
+
+- Modern browsers do not expose httpOnly cookies to JavaScript. The extension’s fetch/XHR wrappers cannot read the Cookie header that the browser attaches automatically.
+- If ChatHub uses session cookies, retrieve them via Chrome DevTools:
+  1) Open https://app.chathub.gg
+  2) Open DevTools → Application → Cookies → https://app.chathub.gg
+  3) Copy the relevant session cookie(s) and place them into CHATHUB_AUTH_COOKIE in the proxy .env as a Cookie header string (e.g., session=...; other=...).
+- If ChatHub uses an Authorization bearer or custom header set by client JS, the extension logs will likely include it in request headers; you can use that value for CHATHUB_AUTH_HEADER instead.
+### Additional OpenAI-compatible endpoints
+
+- GET /v1/models
+  - Returns a single model entry based on OPENAI_DEFAULT_MODEL (or the model you configure).
+- POST /v1/completions
+  - Legacy completions API. Accepts {"model": "...", "prompt": "..."}. Internally mapped to ChatHub with a single user message.
