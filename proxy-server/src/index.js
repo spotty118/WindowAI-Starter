@@ -27,6 +27,22 @@ function safeJson(s) {
   }
 }
 
+function mapOpenAIToChatHubModel(m) {
+  const model = (m || DEFAULT_MODEL || "").toLowerCase();
+
+  if (model.includes("claude")) {
+    if (model.includes("sonnet-4")) return "anthropic/claude-sonnet-4";
+    if (model.includes("sonnet")) return "anthropic/claude-sonnet";
+    if (model.includes("opus")) return "anthropic/claude-opus";
+    return "anthropic/claude-sonnet-4";
+  }
+  if (model.includes("gpt-4o")) return "openai/gpt-4o";
+  if (model.includes("gpt-4.1") || model.includes("gpt-4-1")) return "openai/gpt-4.1";
+  if (model.includes("gpt-4")) return "openai/gpt-4";
+  if (model.includes("gpt-3.5")) return "openai/gpt-3.5";
+  return "openai/gpt-5";
+}
+
 function openaiToChatHubPayload(body) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const model = body?.model || DEFAULT_MODEL;
@@ -114,8 +130,12 @@ app.post("/v1/completions", async (req, res) => {
     const model = req.body?.model || DEFAULT_MODEL;
     const payload = { model, messages: [{ role: "user", content: prompt }] };
     const url = new URL(API_PATH, BASE_URL).toString();
+
+    const headers = headersForChatHub();
+    headers["x-model"] = mapOpenAIToChatHubModel(model);
+
     const resp = await axios.post(url, payload, {
-      headers: headersForChatHub(),
+      headers,
       validateStatus: () => true,
       timeout: 60000
     });
@@ -164,8 +184,12 @@ app.post("/v1/chat/completions", async (req, res) => {
   try {
     const payload = openaiToChatHubPayload(req.body || {});
     const url = new URL(API_PATH, BASE_URL).toString();
+
+    const headers = headersForChatHub();
+    headers["x-model"] = mapOpenAIToChatHubModel(payload.model);
+
     const resp = await axios.post(url, payload, {
-      headers: headersForChatHub(),
+      headers,
       validateStatus: () => true,
       timeout: 60000
     });
