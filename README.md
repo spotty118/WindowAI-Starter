@@ -202,3 +202,9 @@ Notes:
   - Returns a single model entry based on OPENAI_DEFAULT_MODEL (or the model you configure).
 - POST /v1/completions
   - Legacy completions API. Accepts {"model": "...", "prompt": "..."}. Internally mapped to ChatHub with a single user message.
+### Cookie retrieval via extension (optional)
+
+- The extension now includes a "Show Cookies" button in the popup. It reads cookies for chathub.gg (requires cookies permission) and renders a ready-to-paste Cookie header.
+- Click "Copy Cookie header" to copy and paste into CHATHUB_AUTH_COOKIE in proxy-server/.env.
+- You can also "Export cookies JSON" for debugging.
+- Note: Some environments may restrict access to certain cookies. If nothing shows, fall back to Chrome DevTools → Application → Cookies workflow above.

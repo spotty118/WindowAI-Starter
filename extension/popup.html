@@ -13,6 +13,7 @@
     </label>
     <button id="clearBtn">Clear</button>
     <button id="exportBtn">Export</button>
+    <button id="cookiesBtn">Show Cookies</button>
     <select id="filter">
       <option value="all">All</option>
       <option value="fetch">Fetch</option>
@@ -21,6 +22,13 @@
       <option value="sse">SSE</option>
     </select>
     <input id="search" placeholder="Search URL">
+  </div>
+  <div id="cookiesBox" style="display:none; padding:8px;">
+    <div class="controls">
+      <button id="copyCookieHeaderBtn">Copy Cookie header</button>
+      <button id="exportCookiesBtn">Export cookies JSON</button>
+    </div>
+    <div class="kv" id="cookieHeaderBox"></div>
   </div>
   <div id="logs"></div>
   <script src="popup.js"></script>

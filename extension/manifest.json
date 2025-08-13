@@ -3,7 +3,7 @@
   "name": "ChatHub Interceptor",
   "version": "0.1.0",
   "description": "Intercepts network and DOM events on app.chathub.gg for logging and debugging.",
-  "permissions": ["storage", "scripting", "activeTab"],
+  "permissions": ["storage", "scripting", "activeTab", "cookies"],
   "host_permissions": ["https://app.chathub.gg/*"],
   "background": { "service_worker": "background.js" },
   "action": {

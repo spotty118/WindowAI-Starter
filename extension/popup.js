@@ -1,8 +1,10 @@
+ 
 const STORAGE_ENABLED = "chi_enabled";
 const STORAGE_LOGS = "chi_logs";
 const MSG_TOGGLE = "CHI_TOGGLE";
 const MSG_CLEAR = "CHI_CLEAR";
 const MSG_GET_STATE = "CHI_GET_STATE";
+const MSG_GET_COOKIES = "CHI_GET_COOKIES";
 const MSG_BG_BROADCAST = "CHI_BG_BROADCAST";
 
 const enabledToggle = document.getElementById("enabledToggle");
@@ -10,8 +12,15 @@ const clearBtn = document.getElementById("clearBtn");
 const exportBtn = document.getElementById("exportBtn");
 const filterSel = document.getElementById("filter");
 const searchInp = document.getElementById("search");
+const cookiesBtn = document.getElementById("cookiesBtn");
+const cookiesBox = document.getElementById("cookiesBox");
+const cookieHeaderBox = document.getElementById("cookieHeaderBox");
+const copyCookieHeaderBtn = document.getElementById("copyCookieHeaderBtn");
+const exportCookiesBtn = document.getElementById("exportCookiesBtn");
 const logsEl = document.getElementById("logs");
 
+let cookieHeader = "";
+let cookiesArr = [];
 let state = { enabled: true, logs: [] };
 
 function apiTag(api) {
@@ -125,4 +134,32 @@ chrome.runtime.onMessage.addListener((msg) => {
       }
     }
   } catch {}
+});
+cookiesBtn.addEventListener("click", () => {
+  chrome.runtime.sendMessage({ type: MSG_GET_COOKIES }, (res) => {
+    if (res && res.ok) {
+      cookieHeader = res.header || "";
+      cookiesArr = Array.isArray(res.cookies) ? res.cookies : [];
+      cookiesBox.style.display = "block";
+      cookieHeaderBox.textContent = cookieHeader || "(no cookies found)";
+    } else {
+      cookiesBox.style.display = "block";
+      cookieHeaderBox.textContent = "Failed to fetch cookies";
+    }
+  });
+});
+copyCookieHeaderBtn.addEventListener("click", () => {
+  if (!cookieHeader) return;
+  navigator.clipboard.writeText(cookieHeader);
+});
+exportCookiesBtn.addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(cookiesArr, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "chathub-cookies.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 });

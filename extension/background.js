@@ -1,9 +1,11 @@
+ 
 const STORAGE_ENABLED = "chi_enabled";
 const STORAGE_LOGS = "chi_logs";
 const MSG_TO_BACKGROUND = "CHI_TO_BG";
 const MSG_TOGGLE = "CHI_TOGGLE";
 const MSG_CLEAR = "CHI_CLEAR";
 const MSG_GET_STATE = "CHI_GET_STATE";
+const MSG_GET_COOKIES = "CHI_GET_COOKIES";
 const MSG_BG_BROADCAST = "CHI_BG_BROADCAST";
 const MAX_LOGS = 1000;
 
@@ -68,6 +70,33 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === MSG_GET_STATE) {
       const [enabled, logs] = await Promise.all([getEnabled(), getLogs()]);
       sendResponse({ ok: true, enabled, logs });
+    if (msg.type === MSG_GET_COOKIES) {
+      try {
+        const cookies = await chrome.cookies.getAll({ domain: "chathub.gg" });
+        const arr = Array.isArray(cookies) ? cookies : [];
+        const header = arr
+          .filter(c => !c.expirationDate || c.expirationDate * 1000 > Date.now())
+          .map(c => `${c.name}=${c.value}`)
+          .join("; ");
+        sendResponse({
+          ok: true,
+          header,
+          cookies: arr.map(c => ({
+            name: c.name,
+            value: c.value,
+            domain: c.domain,
+            path: c.path,
+            secure: c.secure,
+            httpOnly: c.httpOnly,
+            sameSite: c.sameSite,
+            expirationDate: c.expirationDate
+          }))
+        });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e) });
+      }
+      return;
+    }
       return;
     }
   })();
