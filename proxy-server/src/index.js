@@ -45,8 +45,9 @@ function mapOpenAIToChatHubModel(m) {
 
 function openaiToChatHubPayload(body) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
-  const model = body?.model || DEFAULT_MODEL;
-  const payload = { messages, model };
+  const requestedModel = body?.model || DEFAULT_MODEL;
+  const mappedModel = mapOpenAIToChatHubModel(requestedModel);
+  const payload = { messages, model: mappedModel };
   if (typeof body?.temperature === "number") payload.temperature = body.temperature;
   if (typeof body?.top_p === "number") payload.top_p = body.top_p;
   if (typeof body?.max_tokens === "number") payload.max_tokens = body.max_tokens;
@@ -56,6 +57,7 @@ function openaiToChatHubPayload(body) {
 function headersForChatHub() {
   const headers = {
     "content-type": "application/json",
+    "x-client-time": new Date().toISOString(),
     ...EXTRA_HEADERS
   };
   if (AUTH_COOKIE) headers["cookie"] = AUTH_COOKIE;
